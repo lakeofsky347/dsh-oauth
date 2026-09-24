@@ -3,6 +3,8 @@
  * These requests do not consult the adapter catalog.
  */
 
+import { qwenEndpoint } from "./qwen.js";
+
 const JSON_HEADERS = { accept: "application/json" };
 
 /**
@@ -182,6 +184,9 @@ function requestFor(provider, access, payload) {
   }
   if (provider === "kimi-coding") {
     return { url: "https://api.kimi.com/coding/v1/models", headers: bearer };
+  }
+  if (provider === "qwen") {
+    return { url: `${qwenEndpoint(payload.resourceUrl)}/models`, headers: bearer };
   }
   if (provider === "github-copilot") {
     return {

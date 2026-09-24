@@ -25,6 +25,8 @@ DshOAuth.registerProvider({ id: "my-provider", name: "My Provider" })
 
 插件装在 profile `oauth`。3080 上原来的 web profile 没有改。
 
+订阅 OAuth 来自当前 dsh 已注册的登录（ChatGPT / Codex、Claude、Grok、GitHub Copilot、Kimi Code、OpenRouter）。通义千问走 chat.qwen.ai 的设备码登录，拉到的模型写进 `qwen` 路由。组合里已经有 DeepSeek 官方账号服务时，面板会多出这项登录，不另拉一份模型目录。
+
 ```sh
 dsh --profile oauth --port 3081
 ```
