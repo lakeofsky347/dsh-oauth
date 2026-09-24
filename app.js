@@ -92,7 +92,7 @@ async function refreshRemote() {
 function pullSummary(pulled) {
   const chat = pulled.filter((model) => model.role !== "image" && model.role !== "video");
   const media = pulled.filter((model) => model.role === "image" || model.role === "video");
-  if (chat.length === 0 && media.length === 0) return "还没有从该 OAuth 账号拉取模型。适配器默认目录不会写入。";
+  if (chat.length === 0 && media.length === 0) return "还没有从该 OAuth 账号拉取模型。官方账号登录后直接由对应适配器使用。";
   const lines = [];
   if (chat.length > 0) lines.push(`对话模型 ${chat.map((model) => escapeHtml(model.name || model.id)).join("、")}`);
   if (media.length > 0) lines.push(`生图和生视频自动使用 ${media.map((model) => escapeHtml(model.name || model.id)).join("、")}，当前对话模型保持不变`);
@@ -123,12 +123,17 @@ function renderList() {
     const detail = loggedIn
       ? `<span class="meta"><span style="color:var(--faint)">token </span><code>${row.tokenPreview || provider.tokenPreview || "••••"}</code>${row.sourceLabel || provider.sourceLabel ? ` · ${row.sourceLabel || provider.sourceLabel}` : ""}</span>
          <span class="meta">${pullSummary(pulled)}</span>`
-      : `<span class="hint">未连接。使用「登录」，或在终端运行下面的命令。</span>
-         <div class="cli"><code>${provider.cli}</code><button class="btn" type="button" data-copy="${provider.id}">复制</button></div>`;
+      : provider.cli
+        ? `<span class="hint">未连接。使用「登录」，或在终端运行下面的命令。</span>
+         <div class="cli"><code>${provider.cli}</code><button class="btn" type="button" data-copy="${provider.id}">复制</button></div>`
+        : `<span class="hint">未连接。点「登录」会打开这个账号的认证页。</span>`;
     const error = row.error ? `<span class="err">${row.error}</span>` : "";
     const waiting = pendingId === provider.id;
+    const pull = provider.pullable === false
+      ? ""
+      : `<button class="btn solid" type="button" data-pull="${provider.id}">拉取模型</button>`;
     const action = loggedIn
-      ? `<button class="btn solid" type="button" data-pull="${provider.id}">拉取模型</button><button class="btn" type="button" data-disconnect="${provider.id}">断开连接</button>`
+      ? `${pull}<button class="btn" type="button" data-disconnect="${provider.id}">断开连接</button>`
       : `<button class="btn solid" type="button" data-login="${provider.id}" ${waiting ? "disabled" : ""}>${waiting ? "登录中" : "登录"}</button>`;
     return `<div class="row">
       <div class="identity">

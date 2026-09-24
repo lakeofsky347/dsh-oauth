@@ -25,6 +25,8 @@ DshOAuth.registerProvider({ id: "my-provider", name: "My Provider" })
 
 官方桌面版安装包 `deepseek-harness-0.1.7-rc.1.20260924.1` 的运行时是 `@deepseek-ai/dsh-app-boot` 0.1.7-rc.1，和上面的 peer 一致。桌面版使用 profile `desktop`，本机页面在 `127.0.0.1:19387`。命令行不能管理这个 profile，依赖写在 `~/.dsh/profiles/desktop/package.json`。
 
+订阅 OAuth 来自当前 dsh 已注册的登录（ChatGPT / Codex、Claude、Grok、GitHub Copilot、Kimi Code、OpenRouter）。另外两项是本插件自己接上的：通义千问走 chat.qwen.ai 的设备码登录，拉到的模型写进 `qwen` 路由；DeepSeek 官方账号走桌面版已有的浏览器登录，不另拉一份模型目录。
+
 单独用命令行时，插件也可以装在 profile `oauth`：
 
 ```sh

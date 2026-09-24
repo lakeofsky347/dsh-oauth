@@ -36,6 +36,28 @@ const PROVIDERS = [
     docs: "https://www.kimi.com/code",
   },
   {
+    id: "openrouter",
+    name: "OpenRouter",
+    flow: "pkce",
+    cli: "dsh oauth login openrouter",
+    docs: "https://openrouter.ai",
+  },
+  {
+    id: "qwen",
+    name: "通义千问",
+    flow: "pkce",
+    cli: "",
+    docs: "https://chat.qwen.ai",
+  },
+  {
+    id: "deepseek-account",
+    name: "DeepSeek 官方账号",
+    flow: "browser",
+    pullable: false,
+    cli: "",
+    docs: "https://platform.deepseek.com",
+  },
+  {
     id: "google-antigravity",
     name: "Google Antigravity",
     flow: "pkce",
