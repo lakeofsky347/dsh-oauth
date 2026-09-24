@@ -40,8 +40,15 @@ export const inject = ["credentials", "settings"];
 const sessions = new Map();
 
 export async function apply(ctx) {
+  // 0.1.7 base already registers this service. ctx.get still returns undefined
+  // here because the name is not in inject, so a second mount is refused.
   if (ctx.get("authorization") === undefined) {
-    await ctx.plugin(AuthorizationService);
+    try {
+      await ctx.plugin(AuthorizationService);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("has been registered")) throw error;
+    }
   }
   const serve = (req, res) => handle(ctx, req, res);
   ctx.inject(["tools", "systemPrompt"], (scoped) => {

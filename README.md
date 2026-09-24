@@ -23,7 +23,9 @@ DshOAuth.registerProvider({ id: "my-provider", name: "My Provider" })
 
 登录只保存 OAuth grant，不把适配器的默认模型目录写进路由。已连接的提供商用「拉取模型」向该 OAuth 账号请求模型列表。xAI 的对话模型来自订阅目录，包含 `grok-4.7-build-fast`；勾选的对话模型写入 `llm-pi-ai` 的 `models`。生图和生视频使用该账号当前的图像、视频模型，调用留在当前对话里，不切换会话所选的对话模型。过期时间用日期时间自己定，也可以用 1 小时到 30 天的快捷项填上再改。到期后这条路由会从模型设置里拿掉，避免退回适配器默认目录。
 
-插件装在 profile `oauth`。3080 上原来的 web profile 没有改。
+官方桌面版安装包 `deepseek-harness-0.1.7-rc.1.20260924.1` 的运行时是 `@deepseek-ai/dsh-app-boot` 0.1.7-rc.1，和上面的 peer 一致。桌面版使用 profile `desktop`，本机页面在 `127.0.0.1:19387`。命令行不能管理这个 profile，依赖写在 `~/.dsh/profiles/desktop/package.json`。
+
+单独用命令行时，插件也可以装在 profile `oauth`：
 
 ```sh
 dsh --profile oauth --port 3081
