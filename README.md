@@ -2,8 +2,6 @@
 
 DeepSeek Harness 的 OAuth 认证管理面板。插件版本 0.1.7，适配 DeepSeek Harness 0.1.7-rc.1（`dsh-v0.1.7-rc.1`）。`@deepseek-ai/dsh`、`dsh-authorization`、`dsh-credentials`、`dsh-tools` 的 peer 都锁在 `0.1.7-rc.1`，启动时的版本检查会按这个范围放行。0.1.7 的基础组合已经挂上 authorization；这个插件只在当前组合里没有该服务时才自己挂上。
 
-版式对齐当前打开的 DeepSeek Harness 深色页（`body[data-ds-dark-theme]`）：底色 `#151517`，卡片 `#232324`，主按钮 `#f9fafb`，强调蓝 `#5686fe`，圆角 12px。结构仍是 Hermes 那种「一行一个提供商」的登录卡片。
-
 自定义接口在 `theme.js` 的 `window.DshOAuth`：
 
 ```js
@@ -32,12 +30,3 @@ DshOAuth.registerProvider({ id: "my-provider", name: "My Provider" })
 ```sh
 dsh --profile oauth --port 3081
 ```
-
-单独预览静态页：
-
-```sh
-cd /Users/skylake/Work/Projects/dsh-oauth
-python3 -m http.server 4173
-```
-
-浏览器访问 http://127.0.0.1:4173 。
