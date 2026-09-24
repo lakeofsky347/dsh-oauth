@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>授权</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./providers.js"></script>
+  <script src="./theme.js"></script>
+  <style>
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100%;
+    }
+    main {
+      width: min(420px, calc(100% - 32px));
+      background: var(--dsh-oauth-layer1);
+      border-radius: var(--dsh-oauth-radius);
+      box-shadow: var(--dsh-oauth-shadow);
+      padding: 24px;
+    }
+    .host { margin: 0; color: var(--dsh-oauth-caption); font-size: 12px; }
+    h1 { margin: 8px 0; font-size: 20px; font-weight: 600; }
+    p { margin: 0 0 20px; color: var(--dsh-oauth-text-secondary); }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  </style>
+</head>
+<body data-ds-dark-theme>
+  <main>
+    <p class="host" id="host"></p>
+    <h1 id="title">登录</h1>
+    <p id="ask"></p>
+    <div class="actions">
+      <button type="button" class="btn" id="deny">取消</button>
+      <button type="button" class="btn solid" id="allow">授权</button>
+    </div>
+  </main>
+  <script>
+    const PAGES = {
+      "openai-codex": { host: "auth.openai.com", product: "ChatGPT" },
+      anthropic: { host: "claude.ai", product: "Claude" },
+      xai: { host: "auth.x.ai", product: "Grok" },
+      "github-copilot": { host: "github.com", product: "GitHub Copilot" },
+      "kimi-coding": { host: "auth.kimi.com", product: "Kimi" },
+      "google-antigravity": { host: "accounts.google.com", product: "Google" },
+    };
+    if (window.opener && window.opener.DshOAuth) {
+      DshOAuth.applyTheme(window.opener.DshOAuth.getTheme());
+    }
+    const id = new URLSearchParams(location.search).get("provider") || "";
+    const page = PAGES[id] || { host: "login", product: "账号" };
+    document.querySelector("#host").textContent = page.host;
+    document.querySelector("#title").textContent = `登录 ${page.product}`;
+    document.querySelector("#ask").textContent =
+      `DeepSeek Harness 想使用你的 ${page.product} 订阅。授权后会回到管理面板。`;
+    document.title = `登录 ${page.product}`;
+
+    function finish(ok) {
+      if (window.opener) {
+        window.opener.postMessage({ type: "dsh-oauth", provider: id, ok }, location.origin);
+      }
+      window.close();
+    }
+    document.querySelector("#allow").addEventListener("click", () => finish(true));
+    document.querySelector("#deny").addEventListener("click", () => finish(false));
+  </script>
+</body>
+</html>

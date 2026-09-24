@@ -1,0 +1,4 @@
+# Subscription OAuth panel. Mounts after the web app so ctx.webServer exists.
+- insert:
+    - id: dsh-oauth
+      name: dsh-oauth

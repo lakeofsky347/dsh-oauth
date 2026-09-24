@@ -1,0 +1,47 @@
+{
+  "name": "dsh-oauth",
+  "version": "0.1.5",
+  "private": true,
+  "description": "DeepSeek Harness 0.1.5 OAuth panel. Frozen against @deepseek-ai/dsh 0.1.5-rc.3.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "client.js",
+    "cordis.patch.yml",
+    "index.html",
+    "auth.html",
+    "app.js",
+    "providers.js",
+    "styles.css",
+    "theme.js",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-authorization": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-credentials": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT"
+}
