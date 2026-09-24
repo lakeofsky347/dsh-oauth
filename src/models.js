@@ -6,6 +6,14 @@
 import { qwenEndpoint } from "./qwen.js";
 
 const JSON_HEADERS = { accept: "application/json" };
+const CODEX_CLIENT_VERSION = "0.156.1";
+
+/** Codex model catalog requires this query; a missing client_version is HTTP 400. */
+export function codexModelsUrl(clientVersion = CODEX_CLIENT_VERSION) {
+  const url = new URL("https://chatgpt.com/backend-api/codex/models");
+  url.searchParams.set("client_version", clientVersion);
+  return url.toString();
+}
 
 /**
  * Chat models stay in the conversation picker. Image and video models are
@@ -97,7 +105,7 @@ function classifyModel(id, info) {
 export async function fetchAccountModels(provider, payload) {
   const access = typeof payload.access === "string" ? payload.access : "";
   if (access.length === 0) throw new Error("这次登录里没有 access token，无法拉取模型");
-  const request = requestFor(provider, access, payload);
+  const request = modelListRequest(provider, access, payload);
   const response = await fetch(request.url, {
     headers: request.headers,
     signal: AbortSignal.timeout(20000),
@@ -162,18 +170,22 @@ function reasoningEffortsOf(rows) {
  * @param {string} access
  * @param {Record<string, unknown>} payload
  */
-function requestFor(provider, access, payload) {
+export function modelListRequest(provider, access, payload = {}) {
   const bearer = { ...JSON_HEADERS, authorization: `Bearer ${access}` };
   if (provider === "openai-codex") {
     const headers = { ...bearer };
     const accountId = chatgptAccountId(access) ?? (typeof payload.accountId === "string" ? payload.accountId : undefined);
     if (accountId) headers["chatgpt-account-id"] = accountId;
-    return { url: "https://chatgpt.com/backend-api/codex/models", headers };
+    return { url: codexModelsUrl(), headers };
   }
   if (provider === "anthropic") {
     return {
       url: "https://api.anthropic.com/v1/models",
-      headers: { ...bearer, "anthropic-version": "2023-06-01" },
+      headers: {
+        ...bearer,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "oauth-2025-04-20",
+      },
     };
   }
   if (provider === "openrouter") {
@@ -183,7 +195,10 @@ function requestFor(provider, access, payload) {
     return { url: "https://cli-chat-proxy.grok.com/v1/models", headers: bearer };
   }
   if (provider === "kimi-coding") {
-    return { url: "https://api.kimi.com/coding/v1/models", headers: bearer };
+    return {
+      url: "https://api.kimi.com/coding/v1/models",
+      headers: { ...bearer, "user-agent": "KimiCLI/1.0" },
+    };
   }
   if (provider === "qwen") {
     return { url: `${qwenEndpoint(payload.resourceUrl)}/models`, headers: bearer };
