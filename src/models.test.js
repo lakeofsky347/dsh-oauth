@@ -71,6 +71,33 @@ test("subscription model maps keep grok-4.7-build-fast and drop hidden or embedd
   }]);
 });
 
+test("reasoning levels stay the ones each account advertises", () => {
+  const [codex] = parseModelList({
+    models: [{
+      slug: "gpt-5.4",
+      display_name: "GPT-5.4",
+      supported_reasoning_levels: [
+        { effort: "low", description: "low" },
+        { effort: "high", description: "high" },
+        { effort: "xhigh", description: "extra" },
+        { effort: "ultra", description: "not a harness level" },
+      ],
+    }],
+  });
+  assert.deepEqual(codex.reasoningEfforts, { low: "low", high: "high", xhigh: "xhigh" });
+
+  const [openai] = parseModelList({
+    data: [{
+      id: "gpt-5.4",
+      supported_reasoning_levels: [{ effort: "none" }, { effort: "medium" }],
+    }],
+  });
+  assert.deepEqual(openai.reasoningEfforts, { off: "none", medium: "medium" });
+
+  const [plain] = parseModelList({ data: [{ id: "claude-sonnet", display_name: "Claude" }] });
+  assert.equal(plain.reasoningEfforts, undefined);
+});
+
 test("preferred media keeps the current image and video models", () => {
   const media = preferredMedia([
     { id: "grok-imagine-image", name: "old image", role: "image" },

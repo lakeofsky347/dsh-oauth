@@ -41,7 +41,7 @@ export function parseModelList(body) {
     const contextWindow = positiveInt(info.context_window, info.contextWindow, item.context_window);
     if (contextWindow !== undefined) model.contextWindow = contextWindow;
     if (role === "chat") {
-      const reasoningEfforts = reasoningEffortsOf(info.reasoning_efforts ?? info.reasoningEfforts ?? item.reasoning_efforts);
+      const reasoningEfforts = reasoningEffortsFrom(info, item);
       if (reasoningEfforts !== undefined) model.reasoningEfforts = reasoningEfforts;
     }
     models.push(model);
@@ -151,18 +151,81 @@ function positiveInt(...values) {
   return undefined;
 }
 
-function reasoningEffortsOf(rows) {
-  if (!Array.isArray(rows)) return undefined;
+/** Vendor spellings that correspond to a harness thinking level. The stored value stays the vendor string. */
+const THINKING_ALIASES = {
+  off: "off",
+  none: "off",
+  disabled: "off",
+  minimal: "minimal",
+  min: "minimal",
+  low: "low",
+  medium: "medium",
+  med: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  "x-high": "xhigh",
+  extra_high: "xhigh",
+  "extra-high": "xhigh",
+  max: "max",
+};
+
+/**
+ * Levels the account catalog actually advertises.
+ * A missing level stays unset, so the harness treats it as unsupported
+ * instead of sending a generic high or xhigh.
+ * @param {object} info
+ * @param {object} item
+ */
+export function reasoningEffortsFrom(info, item) {
   const efforts = {};
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const level = firstString(row.id, row.value);
-    const wire = firstString(row.value, row.id);
-    if (level === undefined || wire === undefined) continue;
-    if (!["minimal", "low", "medium", "high", "xhigh", "max"].includes(level)) continue;
-    efforts[level] = wire;
+  for (const source of [info, item]) {
+    if (!source || typeof source !== "object") continue;
+    collectEffortRows(source.reasoning_efforts, efforts);
+    collectEffortRows(source.reasoningEfforts, efforts);
+    collectLevelList(source.supported_reasoning_levels, efforts);
+    collectLevelList(source.supportedReasoningLevels, efforts);
   }
   return Object.keys(efforts).length > 0 ? efforts : undefined;
+}
+
+function collectEffortRows(rows, efforts) {
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    if (typeof row === "string") {
+      assignEffort(efforts, row, row);
+      continue;
+    }
+    if (!row || typeof row !== "object") continue;
+    const levelName = firstString(row.id, row.effort, row.level);
+    const wire = firstString(row.value, row.wire, row.effort, row.id);
+    assignEffort(efforts, levelName, wire);
+  }
+}
+
+function collectLevelList(rows, efforts) {
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    if (typeof row === "string") {
+      assignEffort(efforts, row, row);
+      continue;
+    }
+    if (!row || typeof row !== "object") continue;
+    const effort = firstString(row.effort, row.id, row.value);
+    assignEffort(efforts, effort, effort);
+  }
+}
+
+function assignEffort(efforts, levelName, wire) {
+  const level = thinkingLevel(levelName);
+  const spelling = firstString(wire);
+  if (level === undefined || spelling === undefined) return;
+  if (efforts[level] !== undefined) return;
+  efforts[level] = spelling;
+}
+
+function thinkingLevel(value) {
+  if (typeof value !== "string") return undefined;
+  return THINKING_ALIASES[value.trim().toLowerCase().replaceAll(" ", "_")];
 }
 
 /**
