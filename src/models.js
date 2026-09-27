@@ -38,7 +38,13 @@ export function parseModelList(body) {
     seen.add(id);
     const name = firstString(info.name, info.display_name, info.title, item.name) ?? id;
     const model = { id, name, role };
-    const contextWindow = positiveInt(info.context_window, info.contextWindow, item.context_window);
+    const contextWindow = positiveInt(
+      info.context_window,
+      info.contextWindow,
+      info.max_input_tokens,
+      item.context_window,
+      item.max_input_tokens,
+    );
     if (contextWindow !== undefined) model.contextWindow = contextWindow;
     if (role === "chat") {
       const reasoningEfforts = reasoningEffortsFrom(info, item);
@@ -106,24 +112,39 @@ export async function fetchAccountModels(provider, payload) {
   const access = typeof payload.access === "string" ? payload.access : "";
   if (access.length === 0) throw new Error("这次登录里没有 access token，无法拉取模型");
   const request = modelListRequest(provider, access, payload);
-  const response = await fetch(request.url, {
-    headers: request.headers,
+  let body = await fetchModelPage(provider, request.url, request.headers);
+  // Anthropic pages its catalog: follow has_more / last_id until the list ends.
+  if (provider === "anthropic") {
+    const rows = Array.isArray(body?.data) ? [...body.data] : [];
+    let page = body;
+    for (let guard = 0; guard < 20 && page?.has_more === true && typeof page.last_id === "string"; guard++) {
+      const next = new URL(request.url);
+      next.searchParams.set("after_id", page.last_id);
+      page = await fetchModelPage(provider, next.toString(), request.headers);
+      if (Array.isArray(page?.data)) rows.push(...page.data);
+    }
+    body = { data: rows };
+  }
+  let models = parseModelList(body);
+  if (provider === "xai") models = await withGrokMedia(models, access);
+  if (models.length === 0) throw new Error(`${provider} 的 OAuth 账号没有返回可用模型`);
+  return models;
+}
+
+async function fetchModelPage(provider, url, headers) {
+  const response = await fetch(url, {
+    headers,
     signal: AbortSignal.timeout(20000),
   });
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`${provider} 模型列表返回 ${response.status}${text ? `: ${text.slice(0, 180)}` : ""}`);
   }
-  let body;
   try {
-    body = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     throw new Error(`${provider} 模型列表不是 JSON`);
   }
-  let models = parseModelList(body);
-  if (provider === "xai") models = await withGrokMedia(models, access);
-  if (models.length === 0) throw new Error(`${provider} 的 OAuth 账号没有返回可用模型`);
-  return models;
 }
 
 async function withGrokMedia(chatModels, access) {
@@ -184,6 +205,7 @@ export function reasoningEffortsFrom(info, item) {
     collectEffortRows(source.reasoningEfforts, efforts);
     collectLevelList(source.supported_reasoning_levels, efforts);
     collectLevelList(source.supportedReasoningLevels, efforts);
+    collectCapabilityMap(source.capabilities?.effort, efforts);
   }
   return Object.keys(efforts).length > 0 ? efforts : undefined;
 }
@@ -215,6 +237,18 @@ function collectLevelList(rows, efforts) {
   }
 }
 
+/**
+ * Anthropic lists effort as an object of per-level flags:
+ * capabilities.effort = { supported, low: { supported }, ..., max: { supported } }.
+ */
+function collectCapabilityMap(map, efforts) {
+  if (!map || typeof map !== "object" || Array.isArray(map) || map.supported === false) return;
+  for (const [key, value] of Object.entries(map)) {
+    if (key === "supported") continue;
+    if (value && typeof value === "object" && value.supported === true) assignEffort(efforts, key, key);
+  }
+}
+
 function assignEffort(efforts, levelName, wire) {
   const level = thinkingLevel(levelName);
   const spelling = firstString(wire);
@@ -243,7 +277,7 @@ export function modelListRequest(provider, access, payload = {}) {
   }
   if (provider === "anthropic") {
     return {
-      url: "https://api.anthropic.com/v1/models",
+      url: "https://api.anthropic.com/v1/models?limit=1000",
       headers: {
         ...bearer,
         "anthropic-version": "2023-06-01",
