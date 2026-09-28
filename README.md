@@ -4,7 +4,7 @@ DeepSeek Harness 的 OAuth 登录面板。用已订阅的账号登录，并把�
 
 Sign in with a subscribed account and pull that account's models into DeepSeek Harness.
 
-适配 DeepSeek Harness 0.1.7 这一线（`>=0.1.7-rc.1 <0.1.8-0`），网页 profile 和官方桌面版都使用这份插件。
+适配 DeepSeek Harness 0.1.7 到 0.2（`>=0.1.7-rc.1 <0.3.0-0`），包括官方桌面版 0.2.0-rc.1。网页 profile 和桌面版都使用这份插件。
 
 ## 安装
 
