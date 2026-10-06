@@ -1,8 +1,8 @@
 {
   "name": "dsh-oauth",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
-  "description": "DeepSeek Harness OAuth panel for desktop 0.2.0-rc.1 and the 0.1.7 line.",
+  "description": "DeepSeek Harness OAuth panel for desktop 0.2.0-rc.2.",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -36,10 +36,10 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh": ">=0.1.7-rc.1 <0.3.0-0",
-    "@deepseek-ai/dsh-authorization": ">=0.1.7-rc.1 <0.3.0-0",
-    "@deepseek-ai/dsh-credentials": ">=0.1.7-rc.1 <0.3.0-0",
-    "@deepseek-ai/dsh-tools": ">=0.1.7-rc.1 <0.3.0-0"
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-authorization": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <0.3.0-0"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

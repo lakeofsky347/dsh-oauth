@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import AuthorizationService from "@deepseek-ai/dsh-authorization";
 import { credentialKey, credentialKeyId, credentialKeyScope } from "@deepseek-ai/dsh-credentials";
+import { accountClientFrom, loginCallbackOrigin, loginSource, signInFailed } from "./account.js";
 import { registerMediaTools } from "./media.js";
 import { fetchAccountModels } from "./models.js";
 import { deletePull, readPull, writePull } from "./pulls.js";
@@ -114,8 +115,9 @@ async function handle(ctx, req, res) {
     if (id === undefined) return json(res, 400, { error: "需要 provider id" });
     if (id === DEEPSEEK_ACCOUNT) {
       const account = deepseekAccount(ctx);
-      if (account !== undefined && typeof account.signOut === "function") await account.signOut();
-      else await ctx.credentials.deleteRecord(DEEPSEEK_KEY);
+      if (account !== undefined && typeof account.signOut === "function") {
+        await account.signOut(accountClientFrom(req));
+      } else await ctx.credentials.deleteRecord(DEEPSEEK_KEY);
     } else {
       await ctx.credentials.deleteRecord(credentialKey(id === QWEN_ID ? OAUTH_SCOPE : PI_AI, id));
       if (id === QWEN_ID && typeof ctx.credentials.set === "function") {
@@ -321,20 +323,19 @@ async function startDeepSeekLogin(ctx, req) {
   if (account === undefined || typeof account.startSignIn !== "function") {
     throw new Error("当前桌面版没有挂上 DeepSeek 官方账号登录");
   }
-  const host = typeof req.headers?.host === "string" && req.headers.host.length > 0
-    ? req.headers.host
-    : "127.0.0.1:19387";
-  const source = host.endsWith(":19387") ? "desktop" : "web";
+  const origin = loginCallbackOrigin(req.headers?.host);
+  const source = loginSource(origin);
   sessions.set(DEEPSEEK_ACCOUNT, { status: "pending" });
-  const state = await account.startSignIn("zh_CN", `http://${host}`, source);
+  const state = await account.startSignIn(accountClientFrom(req), origin, source);
   let url = state?.attempt?.authorizeUrl;
   for (let attempt = 0; attempt < 40 && (typeof url !== "string" || url.length === 0); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 200));
     const next = await account.getState();
     const phase = next?.attempt?.phase;
-    if (phase === "failed" || phase === "expired") {
-      sessions.set(DEEPSEEK_ACCOUNT, { status: "error", error: "DeepSeek 官方账号登录没有完成" });
-      throw new Error("DeepSeek 官方账号登录没有完成");
+    if (signInFailed(phase)) {
+      const message = "DeepSeek 官方账号登录没有完成";
+      sessions.set(DEEPSEEK_ACCOUNT, { status: "error", error: message });
+      throw new Error(message);
     }
     url = next?.attempt?.authorizeUrl;
     if (next?.status === "credential-stored" && (phase === "succeeded" || phase === undefined)) break;
