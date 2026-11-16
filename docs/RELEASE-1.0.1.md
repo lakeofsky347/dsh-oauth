@@ -21,18 +21,28 @@ OpenRouter 当前授权只能确认 Key 用量与预算，没有 Management Key 
 
 ## 安装与发布状态
 
-本地安装包名称为 `lks347-dsh-oauth-1.0.1.tgz`：
+已发布到 [npm：@lks347/dsh-oauth@1.0.1](https://www.npmjs.com/package/@lks347/dsh-oauth/v/1.0.1)，`latest` 指向 `1.0.1`。注册表记录的发布时间为 **2026-11-16 22:25:15（新加坡时间）**；2026-11-17 00:01:45 下载核验通过。
+
+下载已发布安装包，再使用目标 DSH 安装附带的 CLI 添加到指定 profile：
 
 ```sh
+npm pack @lks347/dsh-oauth@1.0.1
 dsh plugin --profile desktop add /absolute/path/to/lks347-dsh-oauth-1.0.1.tgz --offline
 ```
 
-版本 `1.0.0` 曾被撤回，不可复用，因此采用 `1.0.1`。npm 对整包撤回规定了 24 小时重发等待期；依据 2026-11-16 的撤回确认时间，保守可再次发布时间为 **2026-11-17 12:27:26 UTC / 新加坡时间 20:27:26**。[npm 官方规则](https://docs.npmjs.com/policies/unpublish/)
+版本 `1.0.0` 曾被撤回，因此本次采用 `1.0.1`。从注册表下载的包与通过安装、宿主和持久化验收的本地包逐字节一致，共 65 个文件、191,964 字节；SHA-256 为：
 
-Git 仓库、tag 或本地 tgz 的存在不代表 npm 已接收发布；注册表的实际状态可用以下命令确认：
+```text
+76438a3344f8bf045b9ab29d4eb2a067030c451982885f6375bffb9f740861da
+```
+
+发布代码提交为 `06f427716fef8bb4bb8381fcdba368ecbf3cc9a3`，对应 tag `v1.0.1`。发布后的文档状态更新单独提交，不移动 tag，不覆盖已发布的安装包。[注册表核验记录](evidence/release-1.0.1.json) 保留了版本、时间及完整性信息。
+
+可用以下命令核对注册表中的版本、完整性及默认安装标签：
 
 ```sh
 npm view @lks347/dsh-oauth@1.0.1 version dist.integrity
+npm view @lks347/dsh-oauth dist-tags
 ```
 
 升级不会自动给账号增加订阅权限。Google 模型协议、Hermes 本机导入、OpenCode SQLite、团队账单等未完成范围继续明确标注，没有宣称全市场套餐均已实测。

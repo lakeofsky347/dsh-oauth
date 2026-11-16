@@ -1,0 +1,38 @@
+{
+  "status": "published",
+  "checkedAt": "2026-11-16T16:01:45.833Z",
+  "package": "@lks347/dsh-oauth@1.0.1",
+  "commit": "06f427716fef8bb4bb8381fcdba368ecbf3cc9a3",
+  "remoteBranch": "main",
+  "tag": "v1.0.1",
+  "pushed": true,
+  "registryVersionVisible": true,
+  "tarball": {
+    "filename": "lks347-dsh-oauth-1.0.1.tgz",
+    "bytes": 191964,
+    "sha256": "76438a3344f8bf045b9ab29d4eb2a067030c451982885f6375bffb9f740861da",
+    "integrity": "sha512-eYB96MdRwUgYP0xy2WRzRCR2jwoz1uA4BSC7pFNvzVR7E150ZiNE7rmfZEoHQtoxjmmHjMCr2JmJ/5i2JKsYqA=="
+  },
+  "verification": {
+    "unitPassed": 292,
+    "liveProviders": [
+      "openai-codex",
+      "openrouter",
+      "xai"
+    ],
+    "independentLiveProcesses": 2,
+    "installedPackagePassed": true,
+    "olderHostPassed": true,
+    "subscriptionUiScenarios": 19,
+    "authorizationUiScenarios": 11
+  },
+  "registry": {
+    "publishedAt": "2026-11-16T14:25:15.655Z",
+    "latest": "1.0.1",
+    "downloaded": true,
+    "bytes": 191964,
+    "sha256": "76438a3344f8bf045b9ab29d4eb2a067030c451982885f6375bffb9f740861da",
+    "integrity": "sha512-eYB96MdRwUgYP0xy2WRzRCR2jwoz1uA4BSC7pFNvzVR7E150ZiNE7rmfZEoHQtoxjmmHjMCr2JmJ/5i2JKsYqA==",
+    "matchesTestedTarball": true
+  }
+}
