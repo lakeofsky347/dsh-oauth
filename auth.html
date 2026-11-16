@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>授权</title>
+  <title>OAuth 登录</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="./providers.js"></script>
   <script src="./theme.js"></script>
@@ -33,32 +33,43 @@
     <p id="ask"></p>
     <div class="actions">
       <button type="button" class="btn" id="deny">取消</button>
-      <button type="button" class="btn solid" id="allow">授权</button>
+      <button type="button" class="btn solid" id="allow" hidden>演示授权</button>
     </div>
   </main>
   <script>
-    const PAGES = {
-      "openai-codex": { host: "auth.openai.com", product: "ChatGPT" },
-      anthropic: { host: "claude.ai", product: "Claude" },
-      xai: { host: "auth.x.ai", product: "Grok" },
-      "github-copilot": { host: "github.com", product: "GitHub Copilot" },
-      "kimi-coding": { host: "auth.kimi.com", product: "Kimi" },
-      "google-antigravity": { host: "accounts.google.com", product: "Google" },
-    };
-    if (window.opener && window.opener.DshOAuth) {
-      DshOAuth.applyTheme(window.opener.DshOAuth.getTheme());
+    const params = new URLSearchParams(location.search);
+    const id = params.get("provider") || "";
+    const preview = params.get("preview") === "1";
+    const provider = PROVIDERS.find((item) => item.id === id);
+    let locale = params.get("locale") === "en" ? "en" : "zh";
+    const tr = (zh, en) => locale === "en" ? en : zh;
+    const name = provider?.name || id || tr("提供商", "Provider");
+    try {
+      if (window.opener?.DshOAuth) DshOAuth.applyTheme(window.opener.DshOAuth.getTheme());
+    } catch { /* The provider popup may no longer share the opener's origin. */ }
+    function render() {
+      document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+      document.querySelector("#host").textContent = preview ? tr("dsh-oauth · 静态示例", "dsh-oauth · Static example") : tr("dsh-oauth · 本机授权服务", "dsh-oauth · Local authorization service");
+      document.querySelector("#title").textContent = preview ? tr(`${name} 授权示例`, `${name} authorization example`) : tr(`正在启动 ${name} 登录`, `Starting ${name} sign-in`);
+      document.querySelector("#ask").textContent = preview
+        ? tr("此页仅演示授权界面。继续会记录一个示例连接，不会向提供商登录、获取令牌或写入本机凭据。", "This page demonstrates authorization. Continuing records an example connection without signing in, acquiring tokens or saving credentials.")
+        : tr("正在等待本机服务返回授权地址。设备码、补充输入和取消登录按钮会显示在管理面板中。", "Waiting for an authorization URL from the local service. Device codes, additional inputs and cancellation are available in the management panel.");
+      document.title = preview ? tr("静态授权示例", "Static authorization example") : tr(`正在启动 ${name} 登录`, `Starting ${name} sign-in`);
+      document.querySelector("#allow").hidden = !preview;
+      document.querySelector("#allow").textContent = tr("演示授权", "Demo authorization");
+      document.querySelector("#deny").textContent = preview ? tr("取消示例", "Cancel example") : tr("关闭窗口", "Close window");
     }
-    const id = new URLSearchParams(location.search).get("provider") || "";
-    const page = PAGES[id] || { host: "login", product: "账号" };
-    document.querySelector("#host").textContent = page.host;
-    document.querySelector("#title").textContent = `登录 ${page.product}`;
-    document.querySelector("#ask").textContent =
-      `DeepSeek Harness 想使用你的 ${page.product} 订阅。授权后会回到管理面板。`;
-    document.title = `登录 ${page.product}`;
+    window.addEventListener("message", (event) => {
+      const sameOrigin = location.protocol === "file:" ? event.origin === "null" : event.origin === location.origin;
+      if (!sameOrigin || event.source !== window.opener || event.data?.type !== "dsh-oauth-locale") return;
+      locale = event.data.locale === "en" ? "en" : "zh";
+      render();
+    });
+    render();
 
     function finish(ok) {
-      if (window.opener) {
-        window.opener.postMessage({ type: "dsh-oauth", provider: id, ok }, location.origin);
+      if (preview && window.opener) {
+        window.opener.postMessage({ type: "dsh-oauth-preview", provider: id, ok }, location.protocol === "file:" ? "*" : location.origin);
       }
       window.close();
     }

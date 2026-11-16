@@ -17,8 +17,8 @@ const PROVIDERS = [
   {
     id: "xai",
     name: "xAI Grok",
-    flow: "device_code",
-    cli: "dsh oauth login xai",
+    flow: "pkce",
+    cli: "",
     docs: "https://docs.x.ai",
   },
   {
@@ -68,6 +68,6 @@ const PROVIDERS = [
 
 const FLOW_LABEL = {
   pkce: "浏览器登录",
-  device_code: "浏览器登录",
+  device_code: "设备码登录",
   external: "外部 CLI",
 };

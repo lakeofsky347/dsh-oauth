@@ -1,9 +1,21 @@
 {
-  "name": "dsh-oauth",
-  "version": "0.2.1",
-  "private": true,
-  "description": "DeepSeek Harness OAuth panel for desktop 0.2.0-rc.2.",
+  "name": "@lks347/dsh-oauth",
+  "version": "1.0.1",
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
+  "repository": { "type": "git", "url": "git+https://github.com/lakeofsky347/dsh-oauth.git" },
+  "description": "Subscription connections, model capabilities and provider-reported usage for DeepSeek Harness.",
   "type": "module",
+  "scripts": {
+    "test": "node --test src/*.test.js src/usage/*.test.js",
+    "link:peers": "node scripts/link-peers.js",
+    "verify:host": "node scripts/verify-host.mjs",
+    "verify:persistence": "node scripts/verify-persistence.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "verify:subscriptions": "node scripts/verify-subscriptions-ui.mjs",
+    "verify:live": "node scripts/verify-live.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
+    "check:upstreams": "node scripts/check-upstreams.mjs"
+  },
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -20,7 +32,11 @@
     "providers.js",
     "styles.css",
     "theme.js",
-    "README.md"
+    "scripts",
+    "upstreams.json",
+    "README.md",
+    "README.en.md",
+    "docs"
   ],
   "dsh": {
     "bundle": {
@@ -36,12 +52,14 @@
     }
   },
   "peerDependencies": {
+    "@earendil-works/pi-ai": ">=0.87.1 <2.0.0",
     "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0",
     "@deepseek-ai/dsh-authorization": ">=0.2.0-rc.2 <0.3.0-0",
     "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <0.3.0-0",
     "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <0.3.0-0"
   },
   "engines": {
+    "dsh": ">=0.2.0-rc.2 <0.3.0-0",
     "node": "^22.19.0 || >=24.0.0"
   },
   "license": "MIT"

@@ -9,10 +9,10 @@
  * Or after load, the same call updates the live page and any auth popup
  * that reads DshOAuth.getTheme() from its opener.
  *
- * Login is separate from paint:
+ * Static-preview hooks only; hosted OAuth always uses the harness API:
  *
- *   DshOAuth.setLoginOpener((provider) => window.open(realAuthUrl))
- *   DshOAuth.onAuthorize(async (provider) => exchangeCode(provider))
+ *   DshOAuth.setLoginOpener((provider) => window.open(previewUrl))
+ *   DshOAuth.onAuthorize(async (provider) => confirmPreview(provider))
  *   DshOAuth.registerProvider({ id, name, cli, docs })
  */
 (function () {

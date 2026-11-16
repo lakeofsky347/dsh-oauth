@@ -38,7 +38,7 @@ export async function loginQwen(session) {
   if (url === undefined || typeof device.device_code !== "string") {
     throw new Error("通义千问没有返回登录地址");
   }
-  session.notify({ message: "在浏览器里完成通义千问登录", url });
+  session.notify({ message: "在浏览器里完成通义千问登录", url, ...(device.user_code ? { code: device.user_code } : {}) });
   const expiresIn = Number(device.expires_in);
   const deadline = Date.now() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 300) * 1000;
   let waitMs = 2000;
@@ -66,6 +66,28 @@ export async function loginQwen(session) {
     };
   }
   throw new Error("通义千问登录超时");
+}
+
+/** Refresh the OAuth grant without losing a non-rotated refresh token or resource URL. */
+export async function refreshQwen(grant, signal = AbortSignal.timeout(20000)) {
+  if (typeof grant.refresh !== "string" || grant.refresh.length === 0) {
+    throw new Error("通义千问登录已过期，请重新登录");
+  }
+  const token = await postForm(TOKEN_URL, {
+    grant_type: "refresh_token",
+    client_id: CLIENT_ID,
+    refresh_token: grant.refresh,
+  }, signal);
+  const access = firstString(token.access_token);
+  if (access === undefined) throw new Error("通义千问刷新没有返回 access token，请重新登录");
+  const lifetime = Number(token.expires_in);
+  return {
+    ...grant,
+    access,
+    refresh: firstString(token.refresh_token) ?? grant.refresh,
+    expires: Date.now() + (Number.isFinite(lifetime) && lifetime > 0 ? lifetime : 3600) * 1000,
+    resourceUrl: qwenEndpoint(firstString(token.resource_url) ?? grant.resourceUrl),
+  };
 }
 
 async function postForm(url, fields, signal) {
@@ -114,6 +136,6 @@ function delay(ms, signal) {
   });
 }
 
-function firstString(value) {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+function firstString(...values) {
+  return values.find((value) => typeof value === "string" && value.length > 0);
 }

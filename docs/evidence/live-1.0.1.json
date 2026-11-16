@@ -1,0 +1,135 @@
+{
+  "ok": true,
+  "checkedAt": "2026-11-16T14:10:59.316Z",
+  "package": "@lks347/dsh-oauth@1.0.1",
+  "mode": "live-provider-read-only",
+  "versions": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-credentials-local": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.2.2-rc.3",
+    "@earendil-works/pi-ai": "1.5.2"
+  },
+  "independentProcesses": 2,
+  "suppliers": [
+    {
+      "provider": "openai-codex",
+      "source": "codex",
+      "catalogCount": 6,
+      "importedCount": 2,
+      "permanent": true,
+      "persistentCapabilitiesVerified": true,
+      "usage": {
+        "status": "fresh",
+        "source": "provider-api",
+        "observedAt": "2026-11-16T14:10:54.276Z",
+        "windowCount": 1,
+        "balanceCount": 1,
+        "units": [
+          "percent",
+          "credits"
+        ],
+        "resetCount": 1,
+        "planPresent": true,
+        "noteCodes": []
+      }
+    },
+    {
+      "provider": "openrouter",
+      "source": "opencode",
+      "catalogCount": 433,
+      "importedCount": 2,
+      "permanent": true,
+      "persistentCapabilitiesVerified": true,
+      "usage": {
+        "status": "partial",
+        "source": "provider-api",
+        "observedAt": "2026-11-16T14:10:56.588Z",
+        "windowCount": 5,
+        "balanceCount": 0,
+        "units": [
+          "money",
+          "requests"
+        ],
+        "resetCount": 0,
+        "planPresent": false,
+        "noteCodes": [
+          "account-balance-needs-permission"
+        ]
+      }
+    },
+    {
+      "provider": "xai",
+      "source": "canonical-native",
+      "catalogCount": 6,
+      "importedCount": 2,
+      "permanent": true,
+      "persistentCapabilitiesVerified": true,
+      "usage": {
+        "status": "fresh",
+        "source": "provider-api",
+        "observedAt": "2026-11-16T14:10:58.652Z",
+        "windowCount": 4,
+        "balanceCount": 1,
+        "units": [
+          "percent",
+          "money"
+        ],
+        "resetCount": 4,
+        "planPresent": false,
+        "noteCodes": []
+      }
+    }
+  ],
+  "requests": {
+    "count": 18,
+    "allHttp200": true,
+    "inference": 0,
+    "refreshTokenExchanges": 0
+  },
+  "sourceUnchanged": [
+    {
+      "provider": "openai-codex",
+      "unchanged": true
+    },
+    {
+      "provider": "openrouter",
+      "unchanged": true
+    }
+  ],
+  "boundaries": {
+    "inferenceRequests": 0,
+    "liveProviderReads": true,
+    "profile": "temporary isolated profile removed after verification",
+    "credentials": "local sources read-only; native OAuth uses original canonical record and atomic refresh only",
+    "secretsInReport": false,
+    "usageAmountsInReport": false,
+    "sourcePathsInReport": false,
+    "longTermElapsedDaysProven": false
+  },
+  "sourceSha256": {
+    "package.json": "d96c4c376c10568924de42a0285ff0a67aeec8551df7ae63d4a342d7f310d567",
+    "src/account.js": "2698b81548c4c8ec79307dae9d5ad6b8ff3dbf6c1fcf5568ceb34a3f4eeb63fb",
+    "src/authorization.js": "3e3fb01e5f6cb1e2345382fe9a8f246583f39b79a23dde772373204b54f4bf8e",
+    "src/catalog.js": "9e9d013732463bb96b565b218728447ce189058f50a05aeb490659ee4a73c5f2",
+    "src/chat-recovery.js": "b5c1672b8ae5ec81a08aa7c3cee6c705d541db1e72f067b2ec1260ffdcdc8e99",
+    "src/connection-runtime.js": "9558316514cfedcd0576b867c0c960dcc6d1affefae984b785173a0e91f5287b",
+    "src/connections.js": "e695dd7e19a3d7310be668c4ec138807781211ff2624940c436dd18bb953d99a",
+    "src/grants.js": "5e7b554bc08822b1a2e4b1959217b01d5260d917232fbd6a972ef9fdf6bc9c4c",
+    "src/index.js": "f021b27e6dceecf234e7dfd24e8206e5c5cc67134c2832266300d4c6aafbca78",
+    "src/local-imports.js": "a20e6627c6f9367ace80a4d4145f2e9f28957647027a555dd9c3e81f9d5dc8cd",
+    "src/media.js": "cf0be4fdc27ae1d875b9d3945c34c2cfb739b37be8f17512e9dd54951fb1febc",
+    "src/models.js": "15ee4d225f4ddaf8ffd1ca828a5829ce168095429a1fd4547c5e8e2078d267a7",
+    "src/profile-store.js": "71a34ed9260b09d68c7f6e795aa603653617d8995fd2273ac7767b4d27f14015",
+    "src/pulls.js": "dc3f0c1086480aca470c70d5275fe707e7f0e70ba63752b3cb3fe5d8ddd11511",
+    "src/qwen.js": "17a951a37814e5a3d37fe0030302e20b7cae716294c59b2622a7beff73a52c1c",
+    "src/request-errors.js": "ed8d9fd2116b92f60c956644cd923d8d6d89c82caa728948f6b4be41240be4d0",
+    "src/routes.js": "4a07fc1582a39963185ebd6bb59245347a909a2acdf87cc58cdff38eaaa5fb2a",
+    "src/xai-browser.js": "68505d86b38ecb0debbe5e51ae34ffa75d0b83b03b18283ff843a1d5b79b95e0",
+    "src/xai-login.js": "dc28ec4bfc2ae9bb6094cec740fd80e54b30bc1d1394daa0c788b6e2006c88d5",
+    "src/usage/aggregators.js": "e019f01794b492e1d002fa343f419e7c1d471db746d4f9021a783e52730179f6",
+    "src/usage/core.js": "6223e9be728ec64c43b49fdb42b4a0c6696d4ab5106efbec9cbce53d9647c5de",
+    "src/usage/index.js": "dc096425b16a1c74da4b5ca2ed6f9edf2e15839b89dd947289f8ec69340aac9a",
+    "src/usage/official.js": "3862b8307b81b31233b4785e525391ab9300511032e2399a6534da0783ad78ad"
+  }
+}

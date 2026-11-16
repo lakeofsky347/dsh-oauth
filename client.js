@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: "dsh-oauth",
+  id: "@lks347/dsh-oauth",
   factory(require) {
     const React = require("react");
     function OAuthSection() {
