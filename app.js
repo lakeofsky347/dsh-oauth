@@ -190,6 +190,27 @@ function pullSummary(pulled, provider) {
   if (!pulled.length) return tr("尚未保存模型。连接后可获取模型与能力。", "No models saved. Fetch models and capabilities after connecting.");
   return tr(`已保存 ${pulled.length} 个模型：`, `Models saved: ${pulled.length} · `) + pulled.map((model) => escapeHtml(model.name || model.id)).join(locale === "en" ? ", " : "、");
 }
+function providerConnectionHint(provider) {
+  if (provider.sourceStatus) return provider.sourceStatus === "source-reauth-required"
+    ? tr("本机授权已到期，请在源 CLI 中续期。", "Local authorization expired. Renew it in the source CLI.")
+    : tr("本机授权来源不可用，请重新选择或断开连接。", "Local authorization is unavailable. Select a source again or disconnect.");
+  if (provider.supportReason === "gemini-consumer-retired") return tr(
+    "Gemini CLI 个人订阅登录已停用。个人 Google 订阅请在 Antigravity CLI 中登录。",
+    "Gemini CLI consumer sign-in ended. Use Antigravity CLI for a personal Google subscription.",
+  );
+  if (provider.supportReason === "qwen-legacy-oauth") return tr(
+    "此入口保留已有的旧版 OAuth。新连接请使用阿里云 Token Plan。",
+    "This entry retains existing legacy OAuth connections. Use Alibaba Cloud Token Plan for new connections.",
+  );
+  if (provider.id === "anthropic") return tr(
+    "使用 Claude Console API Key 连接。Claude Code 订阅由其官方客户端管理。",
+    "Connect with a Claude Console API key. The official client manages Claude Code subscriptions.",
+  );
+  if (provider.keyConnect) return tr("可使用套餐密钥连接。调用与用量查询可能需要不同权限。", "Connect with a plan key. Model access and usage queries may require different permissions.");
+  return provider.pullable === false
+    ? tr("未连接。可用功能以此来源与宿主的支持范围为准。", "Not connected. Available features depend on this source and the host integration.")
+    : tr("未连接。登录后可获取模型与套餐信息。", "Not connected. Sign in to fetch models and plan information.");
+}
 function shownProviders() { return remote === null ? PROVIDERS : remote; }
 function flowLabel(provider) {
   if (provider.authMethods?.length === 0) return tr("连接待支持", "Connection unavailable");
@@ -310,12 +331,12 @@ function renderList() {
     const connection = provider.connection || {};
     const context = [connection.label, connection.sourceLabel || provider.sourceLabel, connection.region, connection.organizationId, connection.workspaceId, connection.projectId].filter(Boolean);
     const detail = loggedIn ? `<span class="meta connection-summary">${escapeHtml(context.join(" · ") || tr("授权已保存", "Authorization saved"))}</span><span class="meta">${pullSummary(pulled, provider)}</span>`
-      : `<span class="hint">${provider.keyConnect ? tr("可使用套餐密钥连接。调用与用量查询可能需要不同权限。", "Connect with a plan key. Model access and usage queries may require different permissions.") : (provider.pullable === false ? tr("未连接。可用功能以此来源与宿主的支持范围为准。", "Not connected. Available features depend on this source and the host integration.") : tr("未连接。登录后可获取模型与套餐信息。", "Not connected. Sign in to fetch models and plan information."))}</span>${provider.cli ? `<div class="cli"><code>${escapeHtml(provider.cli)}</code><button class="btn" type="button" data-copy="${id}">${tr("复制", "Copy")}</button></div>` : ""}`;
+      : `<span class="hint">${providerConnectionHint(provider)}</span>${provider.cli ? `<div class="cli"><code>${escapeHtml(provider.cli)}</code><button class="btn" type="button" data-copy="${id}">${tr("复制", "Copy")}</button></div>` : ""}`;
     const disabled = pendingId || apiMode === "checking" || apiMode === "unavailable";
     const action = loggedIn
       ? `${provider.pullable === false ? "" : `<button class="btn solid" type="button" data-pull="${id}" ${apiMode !== "live" || pendingId ? "disabled" : ""}>${tr("拉取模型", "Fetch models")}</button>`}${apiMode === "live" ? `<button class="btn" type="button" data-configure="${id}">${tr("连接配置", "Connection settings")}</button>${!usageOpen.has(provider.id) ? `<button class="btn" type="button" data-usage="${id}" ${usageBusy.has(provider.id) ? "disabled" : ""}>${tr("套餐与用量", "Plan & usage")}</button>` : ""}` : ""}<button class="btn" type="button" data-disconnect="${id}" ${disabled ? "disabled" : ""}>${apiMode === "preview" ? tr("移除示例", "Remove example") : tr("断开连接", "Disconnect")}</button>`
-      : `${oauth ? `<button class="btn solid" type="button" data-login="${id}" ${disabled || !browserReady ? "disabled" : ""}>${pendingId === provider.id ? tr("登录中", "Signing in") : apiMode === "preview" ? tr("演示登录", "Demo sign-in") : provider.id === "xai" ? tr("浏览器登录", "Browser sign-in") : tr("登录", "Sign in")}</button>` : ""}${provider.keyConnect && apiMode === "live" ? `<button class="btn ${oauth ? "" : "solid"}" type="button" data-connect="${id}" ${disabled ? "disabled" : ""}>${tr("连接密钥", "Connect key")}</button>` : ""}${provider.id === "xai" && apiMode !== "preview" ? `<button class="btn" type="button" data-login="xai" data-login-method="device" ${disabled ? "disabled" : ""}>${tr("设备码备用", "Use device code")}</button>` : ""}${provider.authMethods?.includes("local") && apiMode === "live" ? `<button class="btn" type="button" data-local="${id}">${tr("复用本机授权", "Reuse local authorization")}</button>` : ""}${!oauth && !provider.keyConnect && !provider.authMethods?.includes("local") ? `<span class="hint">${tr("此来源尚未支持连接", "Connection not available for this source")}</span>` : ""}`;
-    return `<div class="row" data-provider="${id}"><div class="identity">${shield(loggedIn)}<div><div class="name-line"><span class="name">${escapeHtml(provider.name)}</span>${badges}</div>${detail}${row.error ? `<span class="err">${escapeHtml(row.error)}</span>` : ""}${!browserReady && apiMode === "live" ? `<span class="hint">${tr("当前服务尚未加载浏览器登录，请重新启动 DSH 以启用新版路线。", "Restart DSH to load browser sign-in support.")}</span>` : ""}${loggedIn ? usageHtml(provider) : ""}</div></div><div class="actions">${provider.docs && safeAuthorizationUrl(provider.docs) ? `<a class="icon-btn" href="${escapeHtml(provider.docs)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(tr(`打开 ${provider.name} 文档`, `Open ${provider.name} documentation`))}">↗</a>` : ""}${action}</div></div>`;
+      : `${oauth ? `<button class="btn solid" type="button" data-login="${id}" ${disabled || !browserReady ? "disabled" : ""}>${pendingId === provider.id ? tr("登录中", "Signing in") : apiMode === "preview" ? tr("演示登录", "Demo sign-in") : provider.id === "xai" ? tr("浏览器登录", "Browser sign-in") : tr("登录", "Sign in")}</button>` : ""}${provider.keyConnect && apiMode === "live" ? `<button class="btn ${oauth ? "" : "solid"}" type="button" data-connect="${id}" ${disabled ? "disabled" : ""}>${tr("连接密钥", "Connect key")}</button>` : ""}${provider.id === "xai" && apiMode !== "preview" ? `<button class="btn" type="button" data-login="xai" data-login-method="device" ${disabled ? "disabled" : ""}>${tr("设备码备用", "Use device code")}</button>` : ""}${provider.authMethods?.includes("local") && apiMode === "live" ? `<button class="btn" type="button" data-local="${id}">${tr("复用本机授权", "Reuse local authorization")}</button>` : ""}${!oauth && !provider.keyConnect && !provider.authMethods?.includes("local") && !provider.supportReason ? `<span class="hint">${tr("此来源尚未支持连接", "Connection not available for this source")}</span>` : ""}`;
+    return `<div class="row" data-provider="${id}"><div class="identity">${shield(loggedIn)}<div><div class="name-line"><span class="name">${escapeHtml(provider.name)}</span>${badges}</div>${detail}${row.error ? `<span class="err">${escapeHtml(row.error)}</span>` : ""}${!browserReady && apiMode === "live" ? `<span class="hint">${tr("当前服务尚未加载浏览器登录，请重新启动 DSH 以启用新版路线。", "Restart DSH to load browser sign-in support.")}</span>` : ""}${loggedIn ? usageHtml(provider) : ""}</div></div><div class="actions">${provider.docs && safeAuthorizationUrl(provider.docs) ? `<a class="icon-btn" href="${escapeHtml(provider.docs)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(tr(`打开 ${provider.name} 文档`, `Open ${provider.name} documentation`))}">↗</a>` : ""}${action}${provider.cliCatalog && apiMode === "live" ? `<button class="btn" type="button" data-pull="${id}">${tr("查看 AGY CLI 模型", "View AGY CLI models")}</button>` : ""}${!loggedIn && provider.sourceStatus && provider.credentialConfigured ? `<button class="btn" type="button" data-disconnect="${id}">${tr("断开连接", "Disconnect")}</button>` : ""}</div></div>`;
   }).join("");
 }
 async function refreshUsage(id) {
@@ -666,6 +687,15 @@ function modelEvidence(model) {
 function renderPull(provider, models, error) {
   const root = document.querySelector("#modal");
   root.hidden = false;
+  if (provider.cliCatalog) {
+    root.innerHTML = `<div class="overlay" data-backdrop="1"><div class="dialog pull-dialog" role="dialog" aria-modal="true" aria-labelledby="pull-title">
+      <h2 id="pull-title">${tr("AGY CLI 模型目录", "AGY CLI model catalog")}</h2>
+      <p class="hint">${tr("目录由 AGY CLI 返回。通过 AGY 使用这些模型，在 CLI 中输入 /usage 查看套餐用量。", "Use these models with AGY CLI. Enter /usage there for plan quota.")}</p>
+      ${error ? `<p class="err" role="alert">${escapeHtml(error)}</p>` : `<ul class="choices">${models.map(model => `<li class="choice"><span>${escapeHtml(model.name)}</span><code>${escapeHtml(model.id)}</code></li>`).join("")}</ul>`}
+      <div class="row-actions"><button class="btn" type="button" id="cancel-pull">${tr("关闭", "Close")}</button></div></div></div>`;
+    focusDialog();
+    return;
+  }
   const chat = models.filter((model) => !model.role || model.role === "chat");
   const media = models.filter((model) => model.role === "image" || model.role === "video");
   const selected = new Set((provider.pulledModels || []).map((model) => model.id));
@@ -701,7 +731,7 @@ async function openPull(id) {
   root.innerHTML = `<div class="overlay"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="loading-title"><h2 id="loading-title">${escapeHtml(tr(`正在拉取 ${provider.name}`, `Fetching ${provider.name}`))}</h2><p class="hint">${tr("正在读取模型目录与能力信息。", "Reading the model catalog and capabilities.")}</p></div></div>`;
   focusDialog();
   let models = [], error = "";
-  try { const body = await post("models", { provider: id }); models = Array.isArray(body.models) ? body.models : []; }
+  try { const body = await post("models", { provider: id, ...(provider.cliCatalog ? { source: "agy" } : {}) }); models = Array.isArray(body.models) ? body.models : []; }
   catch (cause) { error = cause.message; }
   if (serial !== modalSerial) return;
   pullModels = models; pullError = error;
@@ -811,11 +841,21 @@ async function openLocal(id) {
   } catch (error) { if (serial === modalSerial) localTarget.error = error.message; }
   if (serial === modalSerial) { localTarget.loading = false; renderLocal(); }
 }
+function localSourceStatus(source, item) {
+  if (source.available && item.available) return tr("可复用", "Available");
+  if (item.reasonCode === "source-does-not-export-credentials") return tr(
+    "AGY 通过系统钥匙串管理登录，暂无法在此导入。请在 agy 中输入 /usage 查看套餐用量。",
+    "AGY manages sign-in in the system keyring. To view plan usage, enter /usage in agy.",
+  );
+  if (item.reasonCode === "ambiguous-source") return tr("源 CLI 有多个账号，请保留明确的授权来源。", "The source CLI has several accounts. Select a single authorization source.");
+  if (item.reasonCode === "unsupported-provider") return tr("此授权类型与该提供商的接入方式不兼容。", "This authorization type is unsupported for the provider.");
+  return tr("未找到可用授权，请先在源 CLI 登录", "No usable authorization; sign in in the source CLI first");
+}
 function renderLocal() {
   const { provider, sources, loading, error } = localTarget;
   const choices = sources.flatMap((source) => (source.providers || []).filter((item) => item.provider === provider.id).map((item) => ({ source, item })));
   const root = document.querySelector("#modal"); root.hidden = false;
-  root.innerHTML = `<div class="overlay" data-backdrop="1"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="local-title"><h2 id="local-title">${escapeHtml(tr(`复用 ${provider.name} 本机授权`, `Reuse local ${provider.name} authorization`))}</h2><p class="hint">${tr("使用固定位置的 CLI 授权。续期仍由源 CLI 管理，不复制刷新令牌；源 CLI 退出或授权过期后，需要在源 CLI 中重新登录。", "Use authorization from a known CLI location. The source CLI owns renewal; refresh tokens are not copied. Sign in again in that CLI if its authorization expires or is removed.")}</p><form id="local-form"><div class="choices">${loading ? `<p class="hint">${tr("正在检查本机来源…", "Checking local sources…")}</p>` : choices.length ? choices.map(({ source, item }) => `<label class="choice"><input type="radio" name="source" id="local-source-${escapeHtml(source.id)}" value="${escapeHtml(source.id)}" ${source.available && item.available ? "" : "disabled"} required /><span>${escapeHtml(source.label || source.id)}</span><span class="model-capabilities">${source.available && item.available ? tr("可复用", "Available") : tr("未找到可用授权，请先在源 CLI 登录", "No usable authorization; sign in in the source CLI first")}</span></label>`).join("") : `<p class="hint">${tr("没有找到此提供商支持的本机授权来源。", "No supported local authorization source was found for this provider.")}</p>`}</div><p class="err form-error" id="local-error" role="alert">${escapeHtml(error || "")}</p><div class="row-actions"><button class="btn" type="button" id="cancel-local">${tr("取消", "Cancel")}</button><button class="btn solid" id="save-local" type="submit" ${loading || localTarget.saving || !choices.some(({ source, item }) => source.available && item.available) ? "disabled" : ""}>${tr("确认复用此来源", "Use selected source")}</button></div></form></div></div>`;
+  root.innerHTML = `<div class="overlay" data-backdrop="1"><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="local-title"><h2 id="local-title">${escapeHtml(tr(`复用 ${provider.name} 本机授权`, `Reuse local ${provider.name} authorization`))}</h2><p class="hint">${tr("可复用授权的续期由源 CLI 管理。授权过期时，请在对应 CLI 中续期。", "The source CLI manages renewal for reusable credentials. Renew expired authorization in that CLI.")}</p><form id="local-form"><div class="choices">${loading ? `<p class="hint">${tr("正在检查本机来源…", "Checking local sources…")}</p>` : choices.length ? choices.map(({ source, item }) => `<label class="choice"><input type="radio" name="source" id="local-source-${escapeHtml(source.id)}" value="${escapeHtml(source.id)}" ${source.available && item.available ? "" : "disabled"} required /><span>${escapeHtml(source.label || source.id)}</span><span class="model-capabilities">${escapeHtml(localSourceStatus(source, item))}</span></label>`).join("") : `<p class="hint">${tr("没有找到此提供商支持的本机授权来源。", "No supported local authorization source was found for this provider.")}</p>`}</div><p class="err form-error" id="local-error" role="alert">${escapeHtml(error || "")}</p><div class="row-actions"><button class="btn" type="button" id="cancel-local">${tr("取消", "Cancel")}</button><button class="btn solid" id="save-local" type="submit" ${loading || localTarget.saving || !choices.some(({ source, item }) => source.available && item.available) ? "disabled" : ""}>${tr("确认复用此来源", "Use selected source")}</button></div></form></div></div>`;
   focusDialog();
 }
 async function saveLocal(event) {

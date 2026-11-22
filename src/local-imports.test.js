@@ -17,9 +17,21 @@ async function fixture(t) {
 
 test('empty isolated roots discover known sources without leaking host paths', async t => {
   const f = await fixture(t), sources = await f.discoverLocalSources();
-  assert.deepEqual(sources.map(x => x.id), ['codex', 'opencode']);
-  assert.ok(sources.every(x => !x.available && x.reasonCode === 'source-unavailable'));
+  assert.deepEqual(sources.map(x => x.id), ['codex', 'opencode', 'agy']);
+  assert.ok(sources.slice(0, 2).every(x => !x.available && x.reasonCode === 'source-unavailable'));
   assert.equal(JSON.stringify(sources).includes(f.home), false);
+});
+
+test('AGY reports the CLI credential constraint and leaves supported imports available', async t => {
+  const f = await fixture(t);
+  await f.put('opencode', { 'google-antigravity': { type: 'oauth', access: 'synthetic-opencode-access' } });
+  const sources = await f.discoverLocalSources();
+  const agy = sources.find(source => source.id === 'agy');
+  assert.equal(agy.available, false);
+  assert.deepEqual(agy.providers, [{ provider: 'google-antigravity', authType: 'oauth', available: false, reasonCode: 'source-does-not-export-credentials' }]);
+  assert.equal(sources.find(source => source.id === 'opencode').available, true);
+  await assert.rejects(f.readLocalSource('agy', 'google-antigravity'), { code: 'source-does-not-export-credentials' });
+  await assert.rejects(f.readLocalSource('agy', 'openai-codex'), { code: 'unsupported-source' });
 });
 
 test('Codex ChatGPT token normalizes account and expiry, but never exports refresh or ID tokens', async t => {
@@ -165,4 +177,25 @@ test('provider dictionary names cannot disclose another entry secret in preview'
   const preview = await f.discoverLocalSources();
   assert.equal(JSON.stringify(preview).includes('synthetic-token-value'), false);
   assert.deepEqual(preview[1].providers.map(x => x.provider), ['anthropic']);
+});
+
+test('OpenCode v2 discovery uses redacted metadata; imports reread only the requested credential', async t => {
+  const f = await fixture(t);
+  await f.put('opencode', { openrouter: { type: 'api', key: 'obsolete-legacy-key' } });
+  let key = 'v2-first-key';
+  const calls = [];
+  const runOpenCode = async args => {
+    calls.push(args);
+    if (args[0] === '--version') return '2.1.0\n';
+    if (args[1] === 'list') return JSON.stringify([{ id: 'openrouter', connections: [{ type: 'credential', method: 'key' }] }]);
+    assert.deepEqual(args, ['auth', 'export', 'openrouter']);
+    return JSON.stringify([{ integrationID: 'openrouter', value: { type: 'key', key } }]);
+  };
+  const sources = createLocalSources({ home: f.home, runOpenCode });
+  const results = await sources.discoverLocalSources();
+  assert.deepEqual(results.find(source => source.id === 'opencode').providers, [{ provider: 'openrouter', authType: 'api-key', available: true }]);
+  assert.deepEqual(calls, [['--version'], ['auth', 'list', '--format', 'json']]);
+  assert.equal((await sources.readLocalSource('opencode', 'openrouter')).grant.access, 'v2-first-key');
+  key = 'v2-rotated-key';
+  assert.equal((await sources.readLocalSource('opencode', 'openrouter')).grant.access, key);
 });

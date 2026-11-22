@@ -56,6 +56,7 @@ export function createConnectionRuntime(credentials, nativeResolve, { localRead 
       return { connection, rawGrant, grant: { ...rawGrant, ...connection.metadata } };
     }
     if (connection?.mode !== 'local') {
+      if (id === 'anthropic') throw new Error('Connect a Claude Console API key in this plugin. Claude Code subscription sign-in is managed by Claude Code.');
       const grant = await nativeResolve(id, options);
       const rawGrant = typeof nativeResolve.rawGrant === 'function' ? await nativeResolve.rawGrant(grant) : (await readRecord(nativeKey(id)))?.payload;
       await check(id, connection);
@@ -74,6 +75,7 @@ export function createConnectionRuntime(credentials, nativeResolve, { localRead 
       throw Object.assign(new Error('The source CLI returned no usable credential.'), { code: 'source-unavailable' });
     }
     const rawGrant = { type: source.type, access: source.access };
+    if (id === 'anthropic' && rawGrant.type === 'oauth') throw new Error('Connect a Claude Console API key in this plugin.');
     for (const key of ['expires', 'accountId', 'scope']) if (source[key] !== undefined) rawGrant[key] = source[key];
     await check(id, connection, sequence);
     if (rawGrant.type === 'api_key') {
@@ -93,8 +95,9 @@ export function createConnectionRuntime(credentials, nativeResolve, { localRead 
     const oauth = registry.getProvider(id)?.auth?.oauth;
     const auth = typeof oauth?.toAuth === 'function' ? await oauth.toAuth(rawGrant) : { apiKey: rawGrant.access };
     await check(id, connection, sequence);
-    if (!auth?.apiKey) throw new Error('The source CLI credential cannot authorize this provider.');
-    return { connection, rawGrant, grant: { ...rawGrant, access: auth.apiKey, ...(auth.headers ? { requestHeaders: auth.headers } : {}), ...(auth.baseUrl ? { apiBase: auth.baseUrl } : {}) } };
+    const access = auth?.apiKey ?? (id === 'kimi-coding' && auth?.headers ? rawGrant.access : undefined);
+    if (!access) throw new Error('The source CLI credential cannot authorize this provider.');
+    return { connection, rawGrant, grant: { ...rawGrant, access, ...(auth.headers ? { requestHeaders: auth.headers } : {}), ...(auth.baseUrl ? { apiBase: auth.baseUrl } : {}) } };
   }
 
   return {

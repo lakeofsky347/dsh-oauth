@@ -17,7 +17,7 @@ await mkdir(outDir, { recursive: true });
 const completed = [], pageErrors = [], blockedRequests = [], calls = [];
 let usageMode = 'fresh', lateUsage, releaseLate;
 const providers = [
-  { id: 'google-antigravity', name: 'Google Antigravity', flow: 'pkce', authMethods: ['oauth'], usageSupported: true, loggedIn: true, pullable: false, supportReason: 'host-oauth-model-integration-unavailable', pulledModels: [] },
+  { id: 'google-antigravity', name: 'Google Antigravity', cliCatalog: true, flow: 'pkce', authMethods: ['oauth', 'local'], usageSupported: true, loggedIn: true, pullable: false, supportReason: 'host-oauth-model-integration-unavailable', pulledModels: [] },
   { id: 'qwen', name: 'Qwen CLI', flow: 'device_code', authMethods: ['oauth'], usageSupported: false, loggedIn: true, pullable: true, pulledModels: [] },
   { id: 'new-api', name: 'New API', flow: 'key', authMethods: ['key'], keyConnect: true, usageSupported: true, loggedIn: false, pulledModels: [] },
   { id: 'zenmux', name: 'ZenMux', flow: 'key', authMethods: ['key'], keyConnect: true, usageSupported: true, loggedIn: false, pulledModels: [] },
@@ -60,7 +60,11 @@ const server = createServer(async (req, res) => {
         if (['needs-permission', 'needs-configuration', 'rate-limited', 'reauth-required'].includes(usageMode)) return json({ status: usageMode, message: 'Management key required', lastAttemptAt: new Date().toISOString() });
         return json({ status: usageMode === 'partial' ? 'partial' : 'fresh', snapshot, lastAttemptAt: new Date().toISOString() });
       }
-      if (pathname.endsWith('/import/sources')) return json({ sources: [{ id: 'codex', label: 'Codex CLI', available: true, providers: [{ provider: 'openai-codex', authType: 'oauth', available: true }] }, { id: 'opencode', label: 'OpenCode', available: false, providers: [{ provider: 'openai-codex', authType: 'oauth', available: false }] }] });
+      if (pathname.endsWith('/import/sources')) return json({ sources: [
+        { id: 'codex', label: 'Codex CLI', available: true, providers: [{ provider: 'openai-codex', authType: 'oauth', available: true }] },
+        { id: 'opencode', label: 'OpenCode', available: false, providers: [{ provider: 'openai-codex', authType: 'oauth', available: false }] },
+        { id: 'agy', label: 'Antigravity CLI (agy)', available: false, providers: [{ provider: 'google-antigravity', authType: 'oauth', available: false, reasonCode: 'source-does-not-export-credentials' }] },
+      ] });
       if (pathname.endsWith('/import')) return json({ ok: true });
       if (pathname.endsWith('/logout')) { providers.find((item) => item.id === body.provider).loggedIn = false; return json({ ok: true }); }
       if (pathname.endsWith('/login')) return json(auth);
@@ -96,6 +100,19 @@ try {
   completed.push('Original sidebar and rows retained; credentials hidden; no automatic quota calls');
   assert.equal(await row('google-antigravity').getByRole('button', { name: '拉取模型', exact: true }).count(), 0);
   await row('google-antigravity').getByText('可查询套餐用量；当前宿主尚未接入此来源的模型调用。', { exact: true }).waitFor();
+  await row('google-antigravity').getByRole('button', { name: '连接配置', exact: true }).click();
+  await page.getByRole('button', { name: '改用本机 CLI 管理的授权', exact: true }).click();
+  await page.getByText('AGY 通过系统钥匙串管理登录，暂无法在此导入。请在 agy 中输入 /usage 查看套餐用量。', { exact: true }).waitFor();
+  assert.equal(await page.locator('#local-source-agy').isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: '确认复用此来源', exact: true }).isDisabled(), true);
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  completed.push('AGY shows the system-keyring limitation and links the user to the CLI usage command');
+  await row('google-antigravity').getByRole('button', { name: '查看 AGY CLI 模型', exact: true }).click();
+  await page.getByRole('heading', { name: 'AGY CLI 模型目录' }).waitFor();
+  assert.ok(calls.some(item => item.pathname.endsWith('/models') && item.body.provider === 'google-antigravity' && item.body.source === 'agy'));
+  assert.equal(await page.locator('#confirm-pull').count(), 0);
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+
   await row('qwen').getByRole('button', { name: '套餐与用量', exact: true }).click();
   await row('qwen').getByText('此来源暂不提供用量', { exact: true }).waitFor();
   assert.equal(calls.filter((item) => item.pathname.endsWith('/usage')).length, 0);

@@ -7,14 +7,19 @@ import { qwenEndpoint } from "./qwen.js";
 import { OAuthRequestError } from "./request-errors.js";
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { getProviderDefinition } from './catalog.js';
+import { readCodexCatalogClientVersion } from './local-imports.js';
 
 const JSON_HEADERS = { accept: "application/json" };
-const CODEX_CLIENT_VERSION = "0.156.1";
+const CODEX_CLIENT_VERSION = "0.171.0";
+const CODEX_VERSION_FORMAT = /^(?:0|[1-9]\d{0,3})\.(?:0|[1-9]\d{0,3})\.(?:0|[1-9]\d{0,3})$/;
 
 /** Codex model catalog requires this query; a missing client_version is HTTP 400. */
-export function codexModelsUrl(clientVersion = CODEX_CLIENT_VERSION) {
-  const url = new URL("https://chatgpt.com/backend-api/codex/models");
-  url.searchParams.set("client_version", clientVersion);
+export function codexModelsUrl(clientVersion) {
+  const url = new URL(getProviderDefinition("openai-codex").modelsURL);
+  const version = typeof clientVersion === "string" && CODEX_VERSION_FORMAT.test(clientVersion) &&
+    clientVersion.localeCompare(CODEX_CLIENT_VERSION, "en", { numeric: true }) > 0
+    ? clientVersion : CODEX_CLIENT_VERSION;
+  url.searchParams.set("client_version", version);
   return url.toString();
 }
 
@@ -153,15 +158,65 @@ export async function fetchAccountModels(provider, payload) {
   if (definition?.catalogProvider && !definition.modelsURL) {
     const registry = builtinModels({ authContext: { env: async () => undefined, fileExists: async () => false } });
     const installed = await registry.getProvider(definition.catalogProvider)?.getModels();
-    if (!installed?.length) throw new Error('The installed provider catalog is unavailable.');
-    const source = new Map(installed.map(model => [model.id, model]));
-    return parseModelList(installed, provider).map(model => {
+    const source = new Map((installed ?? []).map(model => [model.id, model]));
+    const fallback = parseModelList(installed, provider).map(model => {
       const compat = modelCompatFrom(source.get(model.id)?.compat);
       return { ...model, ...(compat ? { compat } : {}), source: 'installed-catalog', entitlement: 'unknown' };
     });
+    if (provider === 'aliyun-token-plan' || provider === 'zai') {
+      try {
+        const catalog = await fetchModelPage(provider, `${definition.baseURL}/models`, { ...JSON_HEADERS, authorization: `Bearer ${access}` });
+        const models = parseModelList(catalog, provider);
+        if (!models.length) throw new Error(`${provider} returned no supported models.`);
+        const available = new Map(fallback.map(model => [model.id, model]));
+        return models.map(model => ({ ...available.get(model.id), ...model, source: 'account', entitlement: provider === 'aliyun-token-plan' ? 'subscription' : 'unknown' }));
+      } catch (error) {
+        // Older regional endpoints can omit listing entirely.
+        if (!(error instanceof OAuthRequestError) || ![404, 405, 501].includes(error.status)) throw error;
+      }
+    }
+    if (provider === 'minimax') {
+      const url = `https://${definition.region === 'cn' ? 'api.minimax.cn' : 'api.minimax.io'}/v1/token_plan/remains`;
+      try {
+        const quota = await fetchModelPage(provider, url, { ...JSON_HEADERS, authorization: `Bearer ${access}` });
+        const models = new Map(fallback.map(model => [model.id.toLowerCase(), model]));
+        for (const row of Array.isArray(quota?.model_remains) ? quota.model_remains : []) {
+          const id = row?.model_name;
+          if (typeof id !== 'string' || !/^MiniMax-M\d+(?:\.\d+)*(?:-[a-z0-9]+)*$/i.test(id)) continue;
+          const key = id.toLowerCase();
+          models.set(key, { ...(models.get(key) ?? { id, name: id, role: 'chat' }), source: 'account-quota', entitlement: 'subscription' });
+        }
+        if (models.size) return [...models.values()];
+      } catch (error) {
+        if (!(error instanceof OAuthRequestError) || ![404, 405, 501].includes(error.status)) throw error;
+      }
+    }
+    if (!fallback.length) throw new Error('The installed provider catalog is unavailable.');
+    return fallback;
   }
-  const request = modelListRequest(provider, access, payload);
+  const codexClientVersion = provider === "openai-codex" ? await readCodexCatalogClientVersion() : undefined;
+  const request = modelListRequest(provider, access, payload, codexClientVersion);
   let body = await fetchModelPage(provider, request.url, request.headers);
+  if (provider === "openrouter") {
+    const rows = Array.isArray(body?.data) ? [...body.data] : [];
+    const total = body?.total_count;
+    const visited = new Set([request.url]);
+    while (body?.links?.next) {
+      const next = new URL(body.links.next, request.url);
+      const original = new URL(request.url);
+      if (next.origin !== original.origin || next.pathname !== original.pathname || next.username || next.password || next.hash || visited.has(next.href) || visited.size >= 50) {
+        throw new Error("OpenRouter 模型目录分页链接无效或超出限制");
+      }
+      visited.add(next.href);
+      body = await fetchModelPage(provider, next.href, request.headers);
+      if (!Array.isArray(body?.data)) throw new Error("OpenRouter 模型目录分页响应无效");
+      rows.push(...body.data);
+    }
+    if (Number.isInteger(total) && rows.length < total) {
+      throw new Error("OpenRouter 未返回完整的模型目录，请稍后重试");
+    }
+    body = { data: rows };
+  }
   // Anthropic pages its catalog: follow has_more / last_id until the list ends.
   if (provider === "anthropic") {
     const rows = Array.isArray(body?.data) ? [...body.data] : [];
@@ -211,8 +266,12 @@ async function withGrokMedia(chatModels, access) {
   } catch {
     /* Preserve only media the account's successful catalog response listed. */
   }
+  const unique = new Map();
+  for (const model of [...preferredMedia(listed), ...listed]) {
+    if (!unique.has(model.id)) unique.set(model.id, model);
+  }
   const seen = new Set(chats.map((model) => model.id));
-  return [...chats, ...preferredMedia(listed).filter((model) => !seen.has(model.id))];
+  return [...chats, ...[...unique.values()].filter((model) => !seen.has(model.id))];
 }
 
 /** Copilot's picker and policy flags describe account availability, including its Individual-only fallback. */
@@ -220,7 +279,8 @@ function copilotAccountCatalog(body, requestUrl) {
   const rows = Array.isArray(body?.data) ? body.data.filter((item) =>
     item && typeof item === "object" && item.capabilities?.type === "chat" &&
     item.capabilities?.supports?.tool_calls !== false) : [];
-  const picker = rows.filter((item) => item.model_picker_enabled === true && item.policy?.state !== "disabled");
+  const picker = rows.filter((item) => item.policy?.state !== "disabled" &&
+    (item.model_picker_enabled === true || item.model_picker_enabled == null && item.policy?.state === "enabled"));
   const individual = requestUrl === "https://api.individual.githubcopilot.com/models";
   return { data: picker.length > 0 || !individual ? picker : rows.filter((item) => item.policy?.state === "enabled") };
 }
@@ -455,8 +515,9 @@ function thinkingLevel(value) {
  * @param {string} provider
  * @param {string} access
  * @param {Record<string, unknown>} payload
+ * @param {string} [codexClientVersion] Version observed in the local Codex CLI cache.
  */
-export function modelListRequest(provider, access, payload = {}) {
+export function modelListRequest(provider, access, payload = {}, codexClientVersion) {
   const authHeaders = new Headers({ ...JSON_HEADERS, authorization: `Bearer ${access}` });
   // Existing OAuth resolvers may attach protocol-specific auth headers. New
   // key connections use only the chosen credential and fixed catalog headers.
@@ -469,9 +530,12 @@ export function modelListRequest(provider, access, payload = {}) {
     const headers = { ...bearer };
     const accountId = chatgptAccountId(access) ?? (typeof payload.accountId === "string" ? payload.accountId : undefined);
     if (accountId) headers["chatgpt-account-id"] = accountId;
-    return { url: codexModelsUrl(), headers };
+    return { url: codexModelsUrl(codexClientVersion), headers };
   }
   if (provider === "anthropic") {
+    if (payload.type === "api_key") {
+      return { url: getProviderDefinition(provider).modelsURL, headers: { ...JSON_HEADERS, "anthropic-version": "2023-06-01", "x-api-key": access } };
+    }
     return {
       url: "https://api.anthropic.com/v1/models?limit=1000",
       headers: {
@@ -485,7 +549,7 @@ export function modelListRequest(provider, access, payload = {}) {
     return { url: "https://openrouter.ai/api/v1/models/user", headers: bearer };
   }
   if (provider === "xai") {
-    return { url: modelsUrl(payload.apiBase, "https://cli-chat-proxy.grok.com/v1"), headers: bearer };
+    return { url: modelsUrl(payload.apiBase, "https://cli-chat-proxy.grok.com/v1"), headers: { "x-xai-token-auth": "xai-grok-cli", ...bearer } };
   }
   if (provider === "kimi-coding") {
     if (payload.region === 'cn' || payload.region === 'global') {

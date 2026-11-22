@@ -54,7 +54,7 @@ test('unverified model listing and unsupported Google login are explicit', () =>
     const row = getProviderDefinition(id);
     assert.equal(row.keyConnect, false);
     assert.equal(row.modelsURL, undefined);
-    assert.equal(row.reason, 'host-oauth-model-integration-unavailable');
+    assert.equal(row.reason, id === 'google-gemini-cli' ? 'gemini-consumer-retired' : 'host-oauth-model-integration-unavailable');
   }
   const internationalAli = getProviderDefinition('aliyun-token-plan');
   assert.equal(internationalAli.keyConnect, true);

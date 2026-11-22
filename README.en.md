@@ -43,11 +43,11 @@ Native OAuth uses the host authorization and credential services. Device codes, 
 The panel can reuse supported entries from **Codex** and **OpenCode** at fixed local locations. Availability is discovered by the server; the browser does not receive the source token or an arbitrary filesystem path.
 
 - Codex: the supported ChatGPT token entry in `auth.json`, normally under `~/.codex/`, or the server's configured `CODEX_HOME`.
-- OpenCode: the legacy provider dictionary in `auth.json`, normally `~/.local/share/opencode/auth.json`, or the server's configured `XDG_DATA_HOME`. Supported OAuth and API-key entries retain their actual provider identity.
+- OpenCode: the v1 provider dictionary in `auth.json`, or v2 saved credentials through the official CLI. OAuth renews in the source CLI.
 
 This saves a reference to an **externally managed** source. The source CLI continues to own refresh and renewal. The plugin rereads the selected source when authorization is needed; it does not copy a refresh token into a competing refresh chain or rewrite the source CLI's file. If the source is removed, expires, or is too close to expiry, renew it in that CLI and retry. Ambiguous entries are rejected rather than silently choosing an account. One provider connection is active at a time.
 
-This implementation does not read OpenCode's newer SQLite database or guess an export-array format. It does not import Hermes credentials. OpenCode and Hermes informed the design, but that research is distinct from an implemented local import source. A generic brand key is not reclassified as a Coding Plan key solely from its name.
+OpenCode v2 lists credential metadata during discovery and exports the selected provider on demand. Set `DSH_OAUTH_OPENCODE_BIN` to the executable's absolute path if the DSH host cannot find it.
 
 ## Provider and evidence boundaries
 
@@ -56,13 +56,13 @@ This implementation does not read OpenCode's newer SQLite database or guess an e
 | Provider definition | Model source or limitation | Usage adapter and important scope |
 | --- | --- | --- |
 | ChatGPT / Codex | Account catalog; native OAuth or supported local source | Account usage windows; account ID retained when available |
-| Claude | Account catalog; host OAuth | OAuth usage windows; required profile permission still applies |
+| Claude API | Account catalog via a Claude Console API key | Claude Code subscriptions and usage stay in the official client |
 | GitHub Copilot | Account picker/policy and declared capabilities | Account usage; request counters and AI credits remain distinct |
 | Kimi Code | Account catalog; host OAuth or plan key | Coding usage for the selected global/China endpoint |
 | MiniMax | Installed host catalog; entitlement unknown | Plan remains endpoint; provider counters and units retained |
 | Z.AI / GLM Coding Plan | Installed host catalog; entitlement unknown | Global/China quota; team queries require both organization and project IDs |
 | Alibaba Cloud Token Plan | Installed host catalog; entitlement unknown | Personal Console Token Plan usage; separate Console credential and selected region |
-| Google Antigravity | **Quota only**; no model protocol integration in the tested host | Remote Google quota summary from compatible OAuth authorization |
+| Google Antigravity | View the model catalog from the official AGY CLI | View subscription usage with `/usage` in AGY |
 | Google Gemini CLI | **Quota only**; no model protocol integration in the tested host | Code Assist quota requires the authorized project and an eligible OAuth account |
 | xAI Grok | Account catalog; browser PKCE or device fallback | CLI billing allowance and credits are separate measures |
 | Nous Portal | Authenticated inference catalog; key connection | Portal OAuth account usage; an inference key alone is insufficient |

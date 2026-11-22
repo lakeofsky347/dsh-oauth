@@ -1,6 +1,6 @@
 {
   "name": "@lks347/dsh-oauth",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
   "repository": { "type": "git", "url": "git+https://github.com/lakeofsky347/dsh-oauth.git" },
   "description": "Subscription connections, model capabilities and provider-reported usage for DeepSeek Harness.",

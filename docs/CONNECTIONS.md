@@ -14,18 +14,18 @@ Key 连接保存在宿主 `dsh-oauth-connections/<provider>` 记录中，调用�
 
 | 提供商 | 模型来源/接入 | 用量读取 | 额外要求与限制 |
 | --- | --- | --- | --- |
-| ChatGPT / Codex | 账号目录，宿主 OAuth / Codex 或 OpenCode 来源 | `GET chatgpt.com/backend-api/wham/usage` | 绑定 ChatGPT account；普通 OpenAI API Key 不替代订阅。按返回窗口解释，不硬编码套餐总 token |
-| Claude | Anthropic 账号目录与 OAuth | `GET api.anthropic.com/api/oauth/usage` | 需要订阅 OAuth 的相应权限；不是 Anthropic API 余额。额外付费与套餐窗口分开 |
+| ChatGPT / Codex | 账号目录，宿主 OAuth / Codex 或 OpenCode 来源 | `GET chatgpt.com/backend-api/wham/usage` | 目录请求使用插件支持的客户端版本，或本机 Codex 缓存记录的更新版本。模型列表来自当前授权账号的在线响应，保留 Codex 模型选择器的可见范围 |
+| Claude API | Claude Console API Key 的 Anthropic 目录 | Claude Code 套餐用量在官方客户端查看 | API Key 属于 Claude Platform 计费通道 |
 | Copilot | 账号 picker/policy 目录 | `GET api.github.com/copilot_internal/user` | 使用原始 GitHub 授权，不使用临时推理 token；只给已用积分而无上限时，不推算余量 |
 | Kimi Code | 账号目录、OAuth 或套餐 Key | `/coding/v1/usages` | 中国/国际区明确选择；比例 0–1 转百分比，钱包固定点金额单独换算。普通 Moonshot Key 不等于 Coding Plan |
-| MiniMax | 已安装目录、Anthropic 协议套餐通道 | `/v1/token_plan/remains` | 用返回比例核对新旧 counts 语义；`0/0` 不自动当无限。中国推理域名与查询域名可不同 |
-| Z.AI / GLM | 已安装目录、Coding 专用通道 | `/api/monitor/usage/quota/limit` | 组织/项目需成对；TOKENS_LIMIT 不擅自换算成原始 token；工具额度单列 |
-| 阿里 Token Plan | 地区对应的已安装目录和 Token Plan 通道 | 个人 Console gateway 读取 | 需要独立 Console token；推理 Key 不自动具有账单权限。本轮不实现团队 ACS3 签名全链路 |
+| MiniMax | 已安装目录加用量响应中明确列出的对话模型，Anthropic 协议套餐通道 | `/v1/token_plan/remains` | 用返回比例核对新旧 counts 语义；`0/0` 不自动当无限。中国推理域名与查询域名可不同 |
+| Z.AI / GLM | 优先查询 Coding 通道目录；服务未实现时使用已安装目录 | `/api/monitor/usage/quota/limit` | 组织/项目需成对；TOKENS_LIMIT 不擅自换算成原始 token；工具额度单列 |
+| 阿里 Token Plan | 优先查询对应地区的 Token Plan 目录；服务未实现时使用已安装目录 | 个人 Console gateway 读取 | 需要独立 Console token；推理 Key 不自动具有账单权限。本轮不实现团队 ACS3 签名全链路 |
 | Grok / xAI | 原有 OAuth 账号目录 | `/v1/billing?format=credits` | 订阅窗口与预付金额分开；已使用本机真实授权通过读取与重启复查，其他套餐仍需分别确认 |
 | Nous Portal | 已授权组织推理目录 | `portal.nousresearch.com/api/oauth/account` | Key 连接另需 Portal OAuth；basis points 转百分比；推理 Key 不发送到 Portal 冒充 OAuth |
-| Antigravity | 本轮没有宿主模型协议 | `daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary` | 仅匹配的有效来源授权可查询，不自动开通项目；远端接口可能变化 |
-| Gemini CLI | 本轮没有宿主模型协议 | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | 需要匹配项目和服务资格，不能用旧消费者登录路线保证当前可用性 |
-| Qwen Code | 原有 OAuth、账号目录 | 不支持主动余量查询 | 不把 CLI 本地累计 token 当账户剩余 |
+| Antigravity | 官方 AGY CLI 目录浏览 | `daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary` | `agy` 通过系统钥匙串管理登入，插件无法从 CLI 直接导入。可在 `agy` 中输入 `/usage` 查看套餐用量。插件查询需要另有匹配的有效来源授权 |
+| Gemini CLI | 本轮没有宿主模型协议 | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | 需要匹配项目和服务资格，不能用已退役的消费者登录路线；个人用户转用 Antigravity |
+| Qwen Code 旧 OAuth | 支持读取和移除已有授权 | 不支持主动余量查询 | 新连接使用阿里云套餐入口 |
 | DeepSeek API | API 模型目录与 API Key | `GET api.deepseek.com/user/balance` | 保留各币种小数余额，与 DSH 的 DeepSeek 官方网页登录账号分开 |
 
 ## 第三方平台
@@ -74,4 +74,4 @@ Key 连接保存在宿主 `dsh-oauth-connections/<provider>` 记录中，调用�
 
 设计参考 [OpenCode](https://github.com/anomalyco/opencode) 的授权与模型接入、[Hermes Agent](https://github.com/NousResearch/hermes-agent) 的能力与套餐状态。字段优先核对供应商合同，包括 [OpenRouter credits](https://openrouter.ai/docs/api/api-reference/credits/get-remaining-credits)、[DeepSeek 余额](https://api-docs.deepseek.com/api/get-user-balance) 和 [Google 服务迁移说明](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)。
 
-尚未完成：Hermes 本机凭据、OpenCode SQLite 读取、Google 模型调用协议、阿里团队 ACS3 账单、New API 用户级订阅账单、LiteLLM 专用管理适配，以及其余供应商真实账号的逐家验收。Codex、OpenRouter、xAI 的真实只读验收已通过，见 [验收记录](LIVE-VALIDATION-1.0.1.md)。接口或服务资格变更仍需重新核对。
+尚未完成：Hermes 本机凭据、Google 模型调用协议、阿里团队 ACS3 账单、New API 用户级订阅账单、LiteLLM 专用管理适配，以及其余供应商真实账号的逐家验收。Codex、OpenRouter、xAI 的真实只读验收已通过，见 [验收记录](LIVE-VALIDATION-1.0.1.md)。接口或服务资格变更仍需重新核对。

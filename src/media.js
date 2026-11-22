@@ -22,6 +22,7 @@ export function registerMediaTools(ctx, resolveGrant, pulls) {
     description: "Generate an image with the signed-in account's image model. The current conversation and its chat model stay as they are.",
     parameters: {
       prompt: { type: "string", required: true, description: "What the image should show." },
+      model: { type: "string", description: "Optional image model ID from this connection's imported models." },
       aspect_ratio: { type: "string", description: "Optional ratio such as 1:1, 16:9, or 9:16." },
       image_url: { type: "string", description: "Optional source image URL when the user wants an edit rather than a new image." },
     },
@@ -31,7 +32,7 @@ export function registerMediaTools(ctx, resolveGrant, pulls) {
     },
     timeoutMs: 120000,
     async execute(args, exec) {
-      return runMedia(ctx, "image", args.prompt, args.aspect_ratio, exec, undefined, args.image_url, resolveGrant, pulls);
+      return runMedia(ctx, "image", args, exec, resolveGrant, pulls);
     },
   })));
   ctx.effect(() => ctx.tools.register(defineTool({
@@ -39,6 +40,7 @@ export function registerMediaTools(ctx, resolveGrant, pulls) {
     description: "Generate a short video with the signed-in account's video model. The current conversation and its chat model stay as they are.",
     parameters: {
       prompt: { type: "string", required: true, description: "What the video should show." },
+      model: { type: "string", description: "Optional video model ID from this connection's imported models." },
       aspect_ratio: { type: "string", description: "Optional ratio such as 16:9 or 9:16." },
       duration: { type: "number", description: "Length in seconds, from 1 to 15." },
       image_url: { type: "string", description: "Optional still image URL to animate." },
@@ -49,7 +51,7 @@ export function registerMediaTools(ctx, resolveGrant, pulls) {
     },
     timeoutMs: 180000,
     async execute(args, exec) {
-      return runMedia(ctx, "video", args.prompt, args.aspect_ratio, exec, args.duration, args.image_url, resolveGrant, pulls);
+      return runMedia(ctx, "video", args, exec, resolveGrant, pulls);
     },
   })));
 }
@@ -58,11 +60,12 @@ const MEDIA_BASE = {
   xai: "https://api.x.ai/v1",
 };
 
-async function runMedia(ctx, role, prompt, aspectRatio, exec, duration, imageUrl, resolveGrant, pulls) {
+async function runMedia(ctx, role, args, exec, resolveGrant, pulls) {
   const chatProvider = exec.agent?.options?.provider;
   const chatModel = exec.agent?.options?.model;
-  const target = await mediaTarget(chatProvider, role, pulls);
+  const target = await mediaTarget(chatProvider, role, args.model, pulls);
   if (target === undefined) {
+    if (args.model) throw new Error("所选媒体模型不在此连接已导入的对应目录中。");
     throw new Error(`当前对话还没有可用的${role === "image" ? "生图" : "生视频"}模型。对话模型保持不变。`);
   }
   if (target.base === undefined) {
@@ -72,16 +75,16 @@ async function runMedia(ctx, role, prompt, aspectRatio, exec, duration, imageUrl
   const access = grant.access;
   if (access.length === 0) throw new Error("OAuth 登录已失效，无法调用媒体模型。对话模型保持不变。");
   const url = role === "image"
-    ? await generateImage(target.base, access, target.model, prompt, aspectRatio, imageUrl, exec.signal)
-    : await generateVideo(target.base, access, target.model, prompt, aspectRatio, duration, imageUrl, exec.signal);
+    ? await generateImage(target.base, access, target.model, args.prompt, args.aspect_ratio, args.image_url, exec.signal)
+    : await generateVideo(target.base, access, target.model, args.prompt, args.aspect_ratio, args.duration, args.image_url, exec.signal);
   const stayed = chatModel ? `当前对话模型仍是 ${chatModel}。` : "当前对话模型未改变。";
   return `已用 ${target.model} 完成${role === "image" ? "生图" : "生视频"}。${stayed}\n${url}`;
 }
 
-async function mediaTarget(chatProvider, role, pulls) {
+async function mediaTarget(chatProvider, role, selected, pulls) {
   if (typeof chatProvider !== "string" || chatProvider.length === 0) return undefined;
   const pull = (await pulls.list()).find((item) => item.id === chatProvider);
-  const model = pull?.media?.find((item) => item.role === role);
+  const model = pull?.media?.find((item) => item.role === role && (!selected || item.id === selected));
   if (!model) return undefined;
   return { provider: chatProvider, model: model.id, base: MEDIA_BASE[chatProvider] };
 }

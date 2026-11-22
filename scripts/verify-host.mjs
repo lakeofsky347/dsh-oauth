@@ -44,18 +44,10 @@ try {
   let commitDuringCancel = false;
   const deepseekCancels = [];
   let deepseekState = { status: "signed-out", attempt: null };
-  let pauseQwenRecord;
-  let pauseQwenReference;
   class MemoryCredentials extends CredentialProvider {
     async resolve(ref) { const value = references.get(ref); return value === undefined ? undefined : { value, source: "memory" }; }
     async describe(ref) { return { configured: references.has(ref), writable: true }; }
     async set(ref, value) {
-      if (ref === "QWEN_OAUTH_ACCESS" && pauseQwenReference) {
-        const pause = pauseQwenReference;
-        pauseQwenReference = undefined;
-        pause.enter();
-        await pause.wait;
-      }
       references.set(ref, value); this.notifyUpdated(ref);
     }
     async unset(ref) { references.delete(ref); this.notifyUpdated(ref); }
@@ -63,12 +55,6 @@ try {
     async describeRecord(key) { const value = records.get(key); return { configured: value !== undefined, writable: true, ...(value === undefined ? {} : { kind: value.kind }) }; }
     async listRecords() { return [...records].map(([key, record]) => ({ key, kind: record.kind })); }
     async modifyRecord(key, mutate) {
-      if (key === credentialKey("dsh-oauth", "qwen") && pauseQwenRecord) {
-        const pause = pauseQwenRecord;
-        pauseQwenRecord = undefined;
-        pause.enter();
-        await pause.wait;
-      }
       const next = await mutate(records.get(key));
       if (next !== undefined) { records.set(key, next); this.notifyRecordUpdated(key); }
       return records.get(key);
@@ -169,28 +155,14 @@ try {
   assert.deepEqual(deepseekCancels, ["deepseek-attempt-2", "deepseek-attempt-3"]);
   assert.ok(ctx.authorization instanceof authorizationModule.AuthorizationService);
   const key = credentialKey("dsh-oauth", "qwen");
-  assert.ok(ctx.authorization.describe(key), "the Qwen flow is registered on the actual AuthorizationService");
-  let networkCalls = 0;
-  globalThis.fetch = async (url, options) => {
-    networkCalls += 1;
-    assert.equal(options.method, "POST");
-    const path = String(url);
-    if (path === "https://chat.qwen.ai/api/v1/oauth2/device/code") {
-      assert.ok(options.body.get("code_challenge"));
-      return new Response(JSON.stringify({ verification_uri_complete: "https://example.invalid/verify", device_code: "offline-device", user_code: "OFFLINE-CODE", expires_in: 30 }));
-    }
-    assert.equal(path, "https://chat.qwen.ai/api/v1/oauth2/token", "unexpected external request is refused");
-    assert.equal(options.body.get("grant_type"), "urn:ietf:params:oauth:grant-type:device_code");
-    return new Response(JSON.stringify({ access_token: "offline-access", refresh_token: "offline-refresh", expires_in: 3600, resource_url: "https://portal.qwen.ai" }));
-  };
-  const notices = [];
-  const outcome = await ctx.authorization.begin({ key, interaction: { notify: (notice) => notices.push(notice), prompt: async () => { throw new Error("unexpected prompt"); } } });
-  assert.deepEqual(outcome, { status: "authorized" });
-  assert.equal(networkCalls, 2);
-  assert.equal(records.get(key)?.payload.access, "offline-access");
-  assert.equal(references.get("QWEN_OAUTH_ACCESS"), "offline-access");
-  assert.equal(notices[0]?.url, "https://example.invalid/verify");
-  assert.equal(notices[0]?.code, "OFFLINE-CODE");
+  assert.equal(ctx.authorization.describe(key), undefined, "new legacy Qwen login is retired");
+  globalThis.fetch = async () => assert.fail("retired Qwen login must not reach the provider");
+  const retired = await request("/oauth/api/login", { provider: "qwen" });
+  assert.equal(retired.status, 400);
+  assert.match(JSON.parse(retired.body).error, /Token Plan/);
+  records.set(key, { kind: "grant", payload: {
+    access: "offline-access", refresh: "offline-refresh", expires: Date.now() + 3600000, resourceUrl: "https://portal.qwen.ai",
+  } });
   globalThis.fetch = async (url, options) => {
     assert.equal(String(url), "https://portal.qwen.ai/v1/models");
     assert.equal(options.headers.authorization, "Bearer offline-access");
@@ -210,34 +182,6 @@ try {
   const loggedOut = await request("/oauth/api/logout", { provider: "qwen" });
   assert.equal(loggedOut.status, 200, loggedOut.body);
   assert.equal(userSettings.providers.qwen, undefined, "logout restores the previous settings through the adapter schema");
-
-  for (const phase of ["record", "reference"]) {
-    let enter;
-    let release;
-    const entered = new Promise((resolve) => { enter = resolve; });
-    const wait = new Promise((resolve) => { release = resolve; });
-    if (phase === "record") pauseQwenRecord = { enter, wait };
-    else pauseQwenReference = { enter, wait };
-    globalThis.fetch = async (url) => new Response(JSON.stringify(String(url).endsWith("/device/code")
-      ? { verification_uri: "https://example.invalid/qwen", device_code: "offline-device", expires_in: 30 }
-      : { access_token: `offline-delayed-${phase}`, refresh_token: "offline-refresh", expires_in: 3600 }));
-    const pending = await request("/oauth/api/login", { provider: "qwen" });
-    assert.equal(pending.status, 200, pending.body);
-    await entered;
-    const disconnecting = request("/oauth/api/logout", { provider: "qwen" });
-    // Let the HTTP handler cancel the flow and queue cleanup behind its in-flight write.
-    await new Promise((resolve) => setImmediate(resolve));
-    release();
-    const disconnected = await disconnecting;
-    assert.equal(disconnected.status, 200, disconnected.body);
-    assert.equal(records.has(key), false, `disconnect wins after a delayed Qwen ${phase} write`);
-    assert.equal(references.has("QWEN_OAUTH_ACCESS"), false, `a delayed Qwen ${phase} write cannot recreate the access reference`);
-  }
-  const replacement = await ctx.authorization.begin({ key, interaction: { notify() {}, prompt: async () => { throw new Error("unexpected prompt"); } } });
-  assert.equal(replacement.status, "authorized");
-  assert.equal(records.get(key).payload.access, "offline-delayed-reference", "a subsequent legitimate Qwen login is preserved");
-  assert.equal(references.get("QWEN_OAUTH_ACCESS"), "offline-delayed-reference");
-  assert.equal((await request("/oauth/api/logout", { provider: "qwen" })).status, 200);
 
   const xaiKey = credentialKey("llm-pi-ai", "xai");
   const removeXaiFlow = ctx.authorization.registerFlow({
@@ -425,7 +369,10 @@ try {
   assert.equal(references.has('DSH_OAUTH_OPENROUTER_KEY'), false);
   assert.equal(records.has(credentialKey('dsh-oauth-connections', 'openrouter')), false);
   for (const providerId of ['minimax', 'zai', 'aliyun-token-plan']) {
-    globalThis.fetch = async () => { throw new Error('Installed catalog must not issue a model or inference request.'); };
+    globalThis.fetch = async (url) => {
+      assert.match(new URL(url).pathname, /(?:models|token_plan[/]remains)$/);
+      return new Response('', { status: 404 });
+    };
     assert.equal((await request('/oauth/api/connect', { provider: providerId, access: `offline-${providerId}`, region: 'cn' })).status, 200);
     const catalog = await request('/oauth/api/models', { provider: providerId });
     assert.equal(catalog.status, 200, catalog.body);
@@ -475,7 +422,7 @@ try {
   const sourceSha256 = {};
   const sourceFiles = ["package.json", "client.js", ...(await readdir(join(pluginRoot, "src"), { recursive: true })).filter((file) => file.endsWith(".js") && !file.endsWith(".test.js")).sort().map((file) => `src/${file}`)];
   for (const file of sourceFiles) sourceSha256[file] = createHash("sha256").update(await readFile(join(pluginRoot, file))).digest("hex");
-  console.log(JSON.stringify({ ok: true, versions, sourceSha256, checks: ["host route", "provider listing", "DeepSeek callback metadata and attempt identity", "DeepSeek stale cancellation refusal", "DeepSeek commit before cancellation", "Qwen device notice and authorization commit", "Qwen standard verification URI fallback", "Qwen disconnect wins delayed record and access-reference writes", "subsequent legitimate Qwen login remains configured", "pull settings parsed by actual adapter schema", "pull persistence", "logout route restoration", "xAI defaults to loopback PKCE and preserves existing six scopes", "xAI production OIDC validation precedes the single canonical grant commit", "pending xAI login cannot silently switch methods", "explicit device fallback and cancellation preserve browser grant", "model catalog rejects future-valid token, refreshes once and retries with persisted grant", "permission denial preserves authorization without forced refresh", "public chat waterfalls persist a forced refresh before retrying", "second chat rejection in the same step does not refresh or retry again", "tool schemas", "settings slot", "unload", "subscription key and billing credential isolation", "account-filtered model capabilities and permanent settings", "quota cache without secrets", "account replacement clears old owned route and snapshot", "MiniMax/ZAI/Ali regional protocol profiles validated by real schema"], network: "mock xAI/provider fetch only, with actual loopback callback HTTP", persistentProfile: "temporary directory only" }, null, 2));
+  console.log(JSON.stringify({ ok: true, versions, sourceSha256, checks: ["host route", "provider listing", "DeepSeek callback metadata and attempt identity", "DeepSeek stale cancellation refusal", "DeepSeek commit before cancellation", "retired Qwen sign-in does not call upstream; existing grant can still pull and log out", "pull settings parsed by actual adapter schema", "pull persistence", "logout route restoration", "xAI defaults to loopback PKCE and preserves existing six scopes", "xAI production OIDC validation precedes the single canonical grant commit", "pending xAI login cannot silently switch methods", "explicit device fallback and cancellation preserve browser grant", "model catalog rejects future-valid token, refreshes once and retries with persisted grant", "permission denial preserves authorization without forced refresh", "public chat waterfalls persist a forced refresh before retrying", "second chat rejection in the same step does not refresh or retry again", "tool schemas", "settings slot", "unload", "subscription key and billing credential isolation", "account-filtered model capabilities and permanent settings", "quota cache without secrets", "account replacement clears old owned route and snapshot", "MiniMax/ZAI/Ali regional protocol profiles validated by real schema"], network: "mock xAI/provider fetch only, with actual loopback callback HTTP", persistentProfile: "temporary directory only" }, null, 2));
 } finally {
   globalThis.fetch = previousFetch;
   if (previousHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = previousHome;

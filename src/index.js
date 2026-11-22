@@ -13,7 +13,7 @@ import { accountClientFrom, loginCallbackOrigin, loginSource, signInFailed } fro
 import { registerMediaTools } from "./media.js";
 import { fetchAccountModels } from "./models.js";
 import { createPullStore } from "./pulls.js";
-import { loginQwen, qwenEndpoint } from "./qwen.js";
+import { qwenEndpoint } from "./qwen.js";
 import { createAuthorizationSessions } from "./authorization.js";
 import { createGrantResolver, QWEN_KEY_NAME } from "./grants.js";
 import { restoreRoute, writeRoute } from "./routes.js";
@@ -24,7 +24,7 @@ import { createConnectionRuntime } from "./connection-runtime.js";
 import { connectionRef, connectionMetadata, validSecret } from "./connections.js";
 import { createUsageService, usageIds } from "./usage/index.js";
 import { providerDefinitions, getProviderDefinition } from "./catalog.js";
-import { discoverLocalSources, readLocalSource } from "./local-imports.js";
+import { discoverLocalSources, fetchAntigravityCliModels, readLocalSource } from "./local-imports.js";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const VERSION = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).version;
@@ -69,6 +69,9 @@ export async function apply(ctx) {
       await mutateProvider(ctx, options.provider, async () => {
         const connection = await connectionRuntime.connections.read(options.provider);
         const pull = await currentPull(ctx, options.provider);
+        if (options.provider === 'anthropic' && pull && (!connection || connection.mode === 'oauth')) {
+          throw new Error('Connect a Claude Console API key and refresh this plugin’s Claude model configuration.');
+        }
         if (connection?.mode === 'local' || connection?.mode === 'key') {
           if (!pull) throw new Error('Import the selected connection’s models before using this provider.');
           await resolveGrant(options.provider);
@@ -95,9 +98,6 @@ export async function apply(ctx) {
       error: error instanceof Error ? error.message : String(error),
     });
     else res.end();
-  });
-  ctx.inject(["authorization"], (scoped) => {
-    scoped.effect(() => registerCodingPlanFlows(ctx, scoped.authorization ?? scoped.get?.("authorization")));
   });
   ctx.inject(["tools", "systemPrompt"], (scoped) => {
     registerMediaTools(scoped, resolveGrant, pulls);
@@ -174,7 +174,7 @@ async function handle(ctx, req, res) {
     for (const source of sources) {
       source.providers = source.providers.map(row => {
         const definition = getProviderDefinition(row.provider);
-        const supported = !!definition && (row.authType === 'oauth' || definition.keyConnect);
+        const supported = !!definition && (row.authType === 'oauth' ? definition.oauthConnect !== false : definition.keyConnect);
         return supported ? row : { ...row, available: false, reasonCode: 'unsupported-provider' };
       });
       source.available = source.providers.some(row => row.available);
@@ -187,6 +187,7 @@ async function handle(ctx, req, res) {
     if (!id) return json(res, 400, { error: '需要 provider id' });
     const runtime = runtimes.get(ctx);
     try {
+      if (url.pathname.endsWith('/usage') && id === 'anthropic') return json(res, 200, { status: 'unsupported' });
       if (url.pathname.endsWith('/usage')) return json(res, 200, await runtime.usage.get(id, { force: body.force === true }));
       await mutateProvider(ctx, id, async () => {
         if (runtime.sessions.get(id)?.status === 'pending') throw new Error('Cancel the pending login before replacing this connection.');
@@ -200,7 +201,7 @@ async function handle(ctx, req, res) {
           await runtime.connectionRuntime.connections.connect(id, body);
         } else if (url.pathname.endsWith('/import')) {
           const imported = await readLocalSource(body.source, id);
-          if (!definition || imported.grant.type === 'api_key' && !definition.keyConnect) throw new Error('This local credential has no supported model route.');
+          if (!definition || (imported.grant.type === 'api_key' ? !definition.keyConnect : definition.oauthConnect === false)) throw new Error('This local credential has no supported model route.');
           await dropRoute(ctx, id);
           await runtime.connectionRuntime.connections.saveLocal(id, body.source, imported.label);
           await runtime.resolveGrant(id);
@@ -236,6 +237,7 @@ async function handle(ctx, req, res) {
     const id = providerId(body.provider);
     if (id === undefined) return json(res, 400, { error: "需要 provider id" });
     try {
+      if (id === 'google-antigravity' && body.source === 'agy') return json(res, 200, { models: await fetchAntigravityCliModels() });
       const models = await accountModels(ctx, id);
       return json(res, 200, { models });
     } catch (error) {
@@ -275,8 +277,7 @@ async function handle(ctx, req, res) {
         if (id === QWEN_ID && typeof ctx.credentials.unset === "function") await ctx.credentials.unset(QWEN_KEY_NAME);
         await dropRoute(ctx, id);
       };
-      if (id === QWEN_ID) await mutateQwenLogin(ctx, disconnect);
-      else await mutateProvider(ctx, id, disconnect);
+      await mutateProvider(ctx, id, disconnect);
     }
     return json(res, 200, { ok: true });
   }
@@ -348,11 +349,24 @@ async function listProviders(ctx) {
     const pull = await currentPull(ctx, row.id);
     const native = row.flow !== 'key';
     row.keyConnect = definition?.keyConnect === true || row.id === 'new-api' || row.id === 'aliyun-token-plan';
-    row.authMethods = [...(native ? ['oauth'] : []), ...(row.keyConnect ? ['key'] : []), ...(definition ? ['local'] : [])];
-    row.usageSupported = usageIds.has(row.id);
-    row.credentialConfigured = !!connection?.access || row.loggedIn || connection?.mode === 'local';
+    const oauth = native && definition?.oauthConnect !== false && row.id !== QWEN_ID;
+    row.authMethods = [...(oauth ? ['oauth'] : []), ...(row.keyConnect ? ['key'] : []), ...(definition && row.id !== QWEN_ID ? ['local'] : [])];
+    row.usageSupported = usageIds.has(row.id) && row.id !== 'anthropic';
+    row.credentialConfigured = !!connection?.access || row.loggedIn && definition?.oauthConnect !== false || connection?.mode === 'local';
     row.billingCredentialConfigured = !!connection?.billingAccess;
     row.loggedIn = row.credentialConfigured;
+    if (connection?.mode === 'local') {
+      try {
+        const { grant } = await readLocalSource(connection.localSource, row.id);
+        if (grant.type === 'oauth' && definition?.oauthConnect === false) row.sourceStatus = 'unsupported-provider';
+      } catch (error) { row.sourceStatus = error.code ?? 'source-unavailable'; }
+      if (row.sourceStatus) row.loggedIn = false;
+    }
+    if (row.id === 'anthropic') {
+      row.name = definition.name;
+      row.cli = '';
+    }
+    if (definition?.docs) row.docs = definition.docs;
     row.connection = connection?.metadata ?? {};
     row.sourceLabel = connection?.mode === 'key' ? 'API Key' : connection?.mode === 'local' ? `${connection.sourceLabel} · external-managed` : row.sourceLabel;
     row.pullable = row.pullable || !!definition?.modelsURL || !!definition?.catalogProvider;
@@ -361,6 +375,7 @@ async function listProviders(ctx) {
     row.pullPermanent = !!pull && pull.expiresAt === null;
     row.modelSource = definition?.modelSource;
     row.supportReason = definition?.reason;
+    if (row.id === 'google-antigravity') row.cliCatalog = true;
     delete row.tokenPreview;
   }
   return rows;
@@ -370,50 +385,6 @@ function mutateProvider(ctx, id, operation) {
   const mutations = runtimes.get(ctx).mutations;
   const next = (mutations.get(id) ?? Promise.resolve()).then(operation);
   mutations.set(id, next.catch(() => {}));
-  return next;
-}
-
-function registerCodingPlanFlows(ctx, authorization) {
-  if (authorization === undefined || typeof authorization.registerFlow !== "function") return;
-  const key = credentialKey(OAUTH_SCOPE, QWEN_ID);
-  try {
-    return authorization.registerFlow({
-      key,
-      label: "通义千问",
-      methods: [{ id: "oauth", label: "浏览器登录" }],
-      async run(session) {
-        const grant = await loginQwen(session);
-        await mutateQwenLogin(ctx, async () => {
-          session.signal.throwIfAborted();
-          await ctx.credentials.modifyRecord(key, async () => {
-            // A cancellation can win while this write waits for the record lock.
-            session.signal.throwIfAborted();
-            return {
-              kind: "grant",
-              payload: {
-                access: grant.access,
-                ...(grant.refresh === undefined ? {} : { refresh: grant.refresh }),
-                expires: grant.expires,
-                resourceUrl: grant.resourceUrl,
-              },
-            };
-          });
-          session.signal.throwIfAborted();
-          if (typeof ctx.credentials.set === "function") await ctx.credentials.set(QWEN_KEY_NAME, grant.access);
-        });
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes("already registered")) throw error;
-  }
-}
-
-/** Let an explicit disconnect clear both writes after any in-flight Qwen login commit. */
-function mutateQwenLogin(ctx, mutate) {
-  const runtime = runtimes.get(ctx);
-  const next = (runtime.qwenLoginWrite ?? Promise.resolve()).then(mutate);
-  runtime.qwenLoginWrite = next.catch(() => {});
   return next;
 }
 
@@ -506,6 +477,8 @@ function deepseekAccount(ctx) {
 }
 
 async function startLogin(ctx, id, req, method) {
+  if (id === QWEN_ID) throw new Error("旧版通义千问 OAuth 已停止接受新连接，请使用阿里云 Token Plan 密钥。");
+  if (getProviderDefinition(id)?.oauthConnect === false) throw new Error("请使用 Claude Console API Key 连接。Claude 订阅登录由 Claude Code 管理。");
   const runtime = runtimes.get(ctx);
   if (runtime.sessions.get(id)?.status !== 'pending' && id !== DEEPSEEK_ACCOUNT) {
     await mutateProvider(ctx, id, async () => {
@@ -539,7 +512,6 @@ async function startLogin(ctx, id, req, method) {
     return runtime.authorizationSessions.begin(runtime.xaiBrowser, id, credentialKey(PI_AI, "xai"));
   }
   if (id === DEEPSEEK_ACCOUNT) return startDeepSeekLogin(ctx, req);
-  if (id === QWEN_ID) return startScopedLogin(ctx, id, OAUTH_SCOPE);
   return startScopedLogin(ctx, id, PI_AI);
 }
 

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { codexModelsUrl, fetchAccountModels, modelListRequest, parseModelList, preferredMedia } from "./models.js";
 import { OAuthRequestError, withGrantRecovery } from "./request-errors.js";
@@ -6,12 +9,49 @@ import { OAuthRequestError, withGrantRecovery } from "./request-errors.js";
 test("codex model list URL includes client_version", () => {
   const url = new URL(codexModelsUrl());
   assert.equal(url.origin + url.pathname, "https://chatgpt.com/backend-api/codex/models");
-  assert.equal(url.searchParams.get("client_version"), "0.156.1");
+  assert.equal(url.searchParams.get("client_version"), "0.171.0");
+  for (const invalid of ["0.99.99", "0.171.0-test", "0.200.0&limit=1", { version: "0.200.0" }]) {
+    assert.equal(new URL(codexModelsUrl(invalid)).searchParams.get("client_version"), "0.171.0");
+  }
+});
+
+test("Codex model pull uses a newer local client version and the connected account's live catalog", async (t) => {
+  const home = await mkdtemp(join(tmpdir(), "dsh-codex-catalog-test-"));
+  const previousHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = home;
+  t.after(async () => {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
+    await rm(home, { recursive: true, force: true });
+  });
+  const cachePath = join(home, "models_cache.json");
+  await writeFile(cachePath, JSON.stringify({ client_version: "0.200.0", models: [{ slug: "another-accounts-model" }] }));
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const request = new URL(url);
+    assert.equal(request.origin + request.pathname, "https://chatgpt.com/backend-api/codex/models");
+    assert.equal(options.headers.authorization, "Bearer fixture-access");
+    assert.equal(options.headers["chatgpt-account-id"], "fixture-account");
+    requests.push(request.searchParams.get("client_version"));
+    return Response.json({ models: [
+      { slug: "new-chat", visibility: "list" },
+      { slug: "existing-chat", visibility: "list" },
+      { slug: "internal-model", visibility: "hide" },
+    ] });
+  });
+  const grant = { access: "fixture-access", accountId: "fixture-account" };
+  const models = await fetchAccountModels("openai-codex", grant);
+  assert.deepEqual(models.map(model => model.id), ["new-chat", "existing-chat"]);
+  await writeFile(cachePath, "{broken cache");
+  await fetchAccountModels("openai-codex", grant);
+  await rm(cachePath);
+  await fetchAccountModels("openai-codex", grant);
+  assert.deepEqual(requests, ["0.200.0", "0.171.0", "0.171.0"]);
 });
 
 test("each OAuth model list sends the fields that provider requires", () => {
   const codex = modelListRequest("openai-codex", "header.payload.sig");
-  assert.equal(new URL(codex.url).searchParams.get("client_version"), "0.156.1");
+  assert.equal(new URL(codex.url).searchParams.get("client_version"), "0.171.0");
 
   const claude = modelListRequest("anthropic", "token");
   assert.equal(claude.headers["anthropic-version"], "2023-06-01");
@@ -412,4 +452,52 @@ test("an authentication rejection on a later Anthropic page retries the read-onl
     { after: "claude-a", authorization: "Bearer renewed" },
   ]);
   assert.equal(resolveCalls, 2);
+});
+
+test("OpenRouter follows same-account pagination and refuses partial or redirected catalog links", async t => {
+  let next = "?limit=1&offset=1";
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const request = new URL(url);
+    assert.equal(request.origin, "https://openrouter.ai");
+    assert.equal(request.pathname, "/api/v1/models/user");
+    assert.equal(options.headers.authorization, "Bearer fixture");
+    requests.push(request.searchParams.get("offset"));
+    return request.searchParams.has("offset")
+      ? Response.json({ data: [{ id: "router/second" }] })
+      : Response.json({ data: [{ id: "router/first" }], total_count: 2, links: { next } });
+  });
+  const get = () => fetchAccountModels("openrouter", { access: "fixture" });
+  assert.deepEqual((await get()).map(model => model.id), ["router/first", "router/second"]);
+  assert.deepEqual(requests, [null, "1"]);
+  next = "https://elsewhere.example/api/v1/models/user";
+  await assert.rejects(get(), /分页链接无效/);
+  next = null;
+  await assert.rejects(get(), /未返回完整/);
+});
+
+test("Copilot retains explicitly policy-enabled chat entries when their picker flag is absent", async t => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({ data: [
+    { id: "listed", model_picker_enabled: true, capabilities: { type: "chat" } },
+    { id: "policy-only", policy: { state: "enabled" }, capabilities: { type: "chat" } },
+    { id: "explicitly-hidden", model_picker_enabled: false, policy: { state: "enabled" }, capabilities: { type: "chat" } },
+    { id: "disabled", model_picker_enabled: true, policy: { state: "disabled" }, capabilities: { type: "chat" } },
+  ] }));
+  const models = await fetchAccountModels("github-copilot", { access: "fixture", apiBase: "https://api.business.githubcopilot.com" });
+  assert.deepEqual(models.map(model => model.id), ["listed", "policy-only"]);
+});
+
+test("Grok catalog retains media variants while keeping the preferred defaults first", async t => {
+  t.mock.method(globalThis, "fetch", async (url) => Response.json({ data: new URL(url).hostname === "api.x.ai"
+    ? [{ id: "grok-imagine-image-2.0" }, { id: "grok-imagine-video-1.5" }]
+    : [{ id: "grok-chat" }, { id: "grok-imagine-image" }, { id: "grok-imagine-video" }, { id: "grok-imagine-image-2.0" }] }));
+  const models = await fetchAccountModels("xai", { access: "fixture" });
+  assert.deepEqual(models.map(model => model.id), ["grok-chat", "grok-imagine-image-2.0", "grok-imagine-video-1.5", "grok-imagine-image", "grok-imagine-video"]);
+});
+
+test("Claude Console model requests use x-api-key instead of subscription authorization", () => {
+  const request = modelListRequest("anthropic", "fixture", { type: "api_key" });
+  assert.equal(request.headers["x-api-key"], "fixture");
+  assert.equal(request.headers.authorization, undefined);
+  assert.equal(request.headers["anthropic-beta"], undefined);
 });

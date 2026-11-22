@@ -79,7 +79,7 @@ export function createGrantResolver(credentials, modelsFactory = builtinModels) 
       if (!payload) throw new Error("OAuth 登录已断开，请重新登录");
     }
     const resolved = await models.getAuth(id, { signal: AbortSignal.timeout(20000) });
-    if (typeof resolved?.auth?.apiKey !== "string" || resolved.auth.apiKey.length === 0) {
+    if (!resolved?.auth) {
       throw new Error(`${id} 的 OAuth 请求凭据不可用，请重新登录`);
     }
     payload = await store.read(id);
@@ -88,12 +88,13 @@ export function createGrantResolver(credentials, modelsFactory = builtinModels) 
     // Derive request auth from the same payload we remember for recovery.
     const oauth = models.getProvider?.(id)?.auth?.oauth;
     const auth = typeof oauth?.toAuth === "function" ? await oauth.toAuth(payload) : resolved.auth;
-    if (typeof auth?.apiKey !== "string" || !auth.apiKey) {
+    const access = auth?.apiKey ?? (id === "kimi-coding" && auth?.headers ? payload.access : undefined);
+    if (typeof access !== "string" || !access) {
       throw new Error(`${id} 的 OAuth 请求凭据不可用，请重新登录`);
     }
     return remember(id, {
       ...payload,
-      access: auth.apiKey,
+      access,
       ...(auth.headers ? { requestHeaders: auth.headers } : {}),
       ...(auth.baseUrl ? { apiBase: auth.baseUrl } : {}),
     }, payload);

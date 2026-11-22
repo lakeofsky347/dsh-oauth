@@ -87,8 +87,11 @@ test('DeepSeek documented effort metadata maps only advertised reasoning levels'
   assert.equal(row.maxTokens, 384000);
 });
 
-test('installed MiniMax, ZAI and Alibaba model imports perform no remote request', async t => {
-  t.mock.method(globalThis, 'fetch', async () => { throw new Error('Installed catalog must not fetch or infer.'); });
+test('installed MiniMax, ZAI and Alibaba models remain available when live discovery is unsupported', async t => {
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    assert.match(new URL(url).pathname, /\/(?:models|token_plan\/remains)$/);
+    return new Response('', { status: 404 });
+  });
   const registry = builtinModels({ authContext: { env: async () => undefined, fileExists: async () => false } });
   for (const provider of ['minimax', 'zai', 'aliyun-token-plan']) for (const region of ['cn', 'global']) {
     const definition = getProviderDefinition(provider, { region });
@@ -136,4 +139,22 @@ test('gateway catalog is bound to configured instance and unconfigured Google do
   assert.equal(request.url, 'https://gateway.example/v1/models');
   assert.throws(() => modelListRequest('new-api', 'key', { baseURL: 'http://127.0.0.1/v1' }), /目录接口/);
   assert.throws(() => modelListRequest('google-antigravity', 'key'), /目录接口/);
+});
+
+test('Alibaba and MiniMax can discover models absent from the installed registry', async t => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(options.headers.authorization, 'Bearer fixture');
+    const target = new URL(url);
+    if (target.hostname === 'token-plan.cn-beijing.maas.aliyuncs.com') {
+      assert.equal(target.pathname, '/compatible-mode/v1/models');
+      return Response.json({ data: [{ id: 'new-bailian-chat' }] });
+    }
+    assert.equal(target.origin + target.pathname, 'https://api.minimax.cn/v1/token_plan/remains');
+    return Response.json({ model_remains: [{ model_name: 'MiniMax-M9' }, { model_name: 'All Models' }] });
+  });
+  const ali = await fetchAccountModels('aliyun-token-plan', { region: 'cn', access: 'fixture' });
+  assert.deepEqual(ali.map(model => [model.id, model.source]), [['new-bailian-chat', 'account']]);
+  const minimax = await fetchAccountModels('minimax', { region: 'cn', access: 'fixture' });
+  assert.equal(minimax.find(model => model.id === 'MiniMax-M9').source, 'account-quota');
+  assert.equal(minimax.some(model => model.id === 'All Models'), false);
 });

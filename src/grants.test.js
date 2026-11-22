@@ -325,3 +325,16 @@ test("a disconnect while waiting for the forced-refresh lock never restores an o
   assert.equal(exchanges, 0);
   assert.equal(credentials.records.has(key), false);
 });
+
+test("Kimi accepts the installed OAuth adapter's header-based authorization", async () => {
+  const key = "llm-pi-ai/kimi-coding";
+  const credentials = memoryCredentials({ [key]: { kind: "grant", payload: { type: "oauth", access: "fixture-kimi" } } });
+  const auth = { headers: { Authorization: "Bearer fixture-kimi" } };
+  const resolveGrant = createGrantResolver(credentials, () => ({
+    getAuth: async () => ({ auth }),
+    getProvider: () => ({ auth: { oauth: { toAuth: async () => auth } } }),
+  }));
+  const result = await resolveGrant("kimi-coding");
+  assert.equal(result.access, "fixture-kimi");
+  assert.deepEqual(result.requestHeaders, auth.headers);
+});

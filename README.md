@@ -52,14 +52,15 @@ dsh plugin --profile desktop add /absolute/path/to/lks347-dsh-oauth-1.0.1.tgz --
 
 | 来源 | 模型接入 | 用量与余量 |
 | --- | --- | --- |
-| ChatGPT / Codex、Claude、Copilot、Kimi、Grok | 原有 OAuth；部分支持套餐 Key 或本机复用 | 账号窗口、比例、重置及接口提供的额外余额 |
-| MiniMax、Z.AI、阿里 Token Plan | 套餐 Key、地区与已安装模型目录 | 套餐接口；阿里个人套餐需额外 Console 授权 |
+| ChatGPT / Codex、Copilot、Kimi、Grok | 原有 OAuth；部分支持套餐 Key 或本机复用 | 账号窗口、比例、重置及接口提供的额外余额 |
+| Claude API | Claude Console API Key 和在线账号目录 | Claude Code 套餐用量在官方客户端查询 |
+| MiniMax、Z.AI、阿里 Token Plan | 套餐 Key、地区与可用目录 | 套餐接口；阿里个人套餐需额外 Console 授权 |
 | OpenRouter | OAuth/Key、当前 Key 过滤的模型目录 | Key 预算；账户余额另需 Management Key |
 | NanoGPT、ZenMux、OpenCode Go/Zen、Kilo、Poe、Synthetic、Chutes | 平台 Key、各自模型目录与调用通道 | 分平台读取窗口、积分、预算或余额；部分需要管理授权/工作区 |
 | Nous Portal | 推理 Key、组织模型目录 | Portal OAuth 查询授权与推理 Key 分开 |
 | DeepSeek API、New API 实例 | API Key；New API 显式配置 HTTPS API 根地址 | DeepSeek API 余额；New API 实例定义的 Key 配额单位 |
-| Google Antigravity / Gemini CLI | 本轮未增加宿主模型调用协议 | 已实现远程查询；需要匹配的有效授权、项目和服务资格 |
-| Qwen Code | 原有 OAuth 与模型导入 | 无本轮可确认的账号余量接口，显示不支持 |
+| Google Antigravity / Gemini CLI | AGY 官方 CLI 目录可在面板查看 | 个人订阅用量在 AGY 的 `/usage` 查询 |
+| Qwen Code | 保留历史 OAuth；新连接使用阿里云套餐入口 | 无本轮可确认的账号余量接口，显示不支持 |
 
 DeepSeek 官方网页登录账号仍沿用宿主集成，与新增的 **DeepSeek API 余额**入口分开。详细接口、凭据要求和边界见 [连接与支持清单](docs/CONNECTIONS.md)。
 
@@ -67,7 +68,7 @@ DeepSeek 官方网页登录账号仍沿用宿主集成，与新增的 **DeepSeek
 
 「持续启用」保存的是模型配置，不会延长上游账号或令牌的有效期。网页登录授权继续由宿主凭据服务及 pi-ai 续期；API Key、查询授权也交给宿主凭据服务保存，不放进浏览器存储或模型配置 JSON。
 
-本机复用支持 Codex 的固定 `auth.json` 和 OpenCode 的传统 `auth.json` 来源。目录来自服务端配置的 `CODEX_HOME`、`XDG_DATA_HOME` 或系统默认值，浏览器不能提交任意文件路径。
+本机复用支持 Codex 的固定 `auth.json`、OpenCode v1 的传统 `auth.json` 及 OpenCode v2 官方 CLI 管理的授权。目录来自服务端配置的 `CODEX_HOME`、`XDG_DATA_HOME` 或系统默认值，浏览器不能提交任意文件路径。
 
 复用采用 **external-managed** 模式：每次使用时重读来源，**不复制刷新令牌，不与源 CLI 同时刷新**。源 CLI 退出或授权临期/过期时，需要在源 CLI 中续期；插件会阻止继续使用自己的旧镜像。本轮没有实现 Hermes 本机凭据导入或 OpenCode SQLite 凭据读取；Hermes 主要提供套餐查询、快照和能力导入的设计参考。
 
